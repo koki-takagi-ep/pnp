@@ -20,6 +20,11 @@ void print_usage(const char* program_name) {
               << "  --L <value>         Domain length in nm (default: 100)\n"
               << "  --N <value>         Number of grid points (default: 1001)\n"
               << "  --output <file>     Output filename (default: results/pnp_results.dat)\n"
+              << "  --model <type>      Model type: standard or bikerman (default: standard)\n"
+              << "  --ion-size <value>  Ion diameter in nm for Bikerman model (default: 0.7)\n"
+              << "  --transient         Run transient simulation instead of steady-state\n"
+              << "  --dt <value>        Time step in ns for transient (default: 0.1)\n"
+              << "  --t-final <value>   Final time in µs for transient (default: 1.0)\n"
               << "  --help              Show this help message\n"
               << std::endl;
 }
@@ -32,6 +37,11 @@ int main(int argc, char* argv[]) {
     double L_nm = 100.0;          // Domain length [nm]
     int N = 1001;                 // Grid points
     std::string output_file = "results/pnp_results.dat";
+    std::string model_type = "standard";  // Model type: standard or bikerman
+    double ion_size_nm = 0.7;     // Ion diameter for Bikerman model [nm]
+    bool run_transient = false;   // Run transient simulation
+    double dt_ns = 0.1;           // Time step [ns]
+    double t_final_us = 1.0;      // Final time [µs]
 
     // Parse command line arguments
     for (int i = 1; i < argc; ++i) {
@@ -51,6 +61,16 @@ int main(int argc, char* argv[]) {
             N = std::atoi(argv[++i]);
         } else if (arg == "--output" && i + 1 < argc) {
             output_file = argv[++i];
+        } else if (arg == "--model" && i + 1 < argc) {
+            model_type = argv[++i];
+        } else if (arg == "--ion-size" && i + 1 < argc) {
+            ion_size_nm = std::atof(argv[++i]);
+        } else if (arg == "--transient") {
+            run_transient = true;
+        } else if (arg == "--dt" && i + 1 < argc) {
+            dt_ns = std::atof(argv[++i]);
+        } else if (arg == "--t-final" && i + 1 < argc) {
+            t_final_us = std::atof(argv[++i]);
         }
     }
 
@@ -66,6 +86,14 @@ int main(int argc, char* argv[]) {
     params.eps_r = eps_r;
     params.L = L_nm * 1e-9;                // Convert nm to m
     params.N = N;
+    params.a = ion_size_nm * 1e-9;         // Convert nm to m
+
+    // Set model type
+    if (model_type == "bikerman") {
+        params.model = pnp::ModelType::BIKERMAN;
+    } else {
+        params.model = pnp::ModelType::STANDARD_PB;
+    }
 
     std::cout << "Parameters:\n";
     std::cout << "  Surface potential: " << phi0_mV << " mV\n";
@@ -73,6 +101,17 @@ int main(int argc, char* argv[]) {
     std::cout << "  Relative permittivity: " << eps_r << "\n";
     std::cout << "  Domain length: " << L_nm << " nm\n";
     std::cout << "  Grid points: " << N << "\n";
+    std::cout << "  Model: " << model_type << "\n";
+    if (model_type == "bikerman") {
+        std::cout << "  Ion size: " << ion_size_nm << " nm\n";
+    }
+    if (run_transient) {
+        std::cout << "  Mode: transient\n";
+        std::cout << "  Time step: " << dt_ns << " ns\n";
+        std::cout << "  Final time: " << t_final_us << " µs\n";
+    } else {
+        std::cout << "  Mode: steady-state\n";
+    }
     std::cout << std::endl;
 
     // Create solver
@@ -83,13 +122,22 @@ int main(int argc, char* argv[]) {
     std::cout << "Computed Debye length: " << lambda_D * 1e9 << " nm\n";
     std::cout << "Domain / Debye length ratio: " << params.L / lambda_D << "\n\n";
 
-    // Solve steady-state PNP equations
-    bool converged = solver.solve();
-
-    if (converged) {
-        std::cout << "\nSolution converged successfully!\n";
+    // Solve PNP equations
+    bool converged = true;
+    if (run_transient) {
+        // Transient simulation
+        double dt = dt_ns * 1e-9;           // Convert ns to s
+        double t_final = t_final_us * 1e-6; // Convert µs to s
+        solver.solve_transient(dt, t_final);
     } else {
-        std::cout << "\nWarning: Solution may not have fully converged.\n";
+        // Steady-state solution
+        converged = solver.solve();
+
+        if (converged) {
+            std::cout << "\nSolution converged successfully!\n";
+        } else {
+            std::cout << "\nWarning: Solution may not have fully converged.\n";
+        }
     }
 
     // Save results
@@ -112,14 +160,15 @@ int main(int argc, char* argv[]) {
     std::cout << "  c+ at bulk: " << c_plus.back() << " mol/m^3\n";
     std::cout << "  c- at bulk: " << c_minus.back() << " mol/m^3\n";
 
-    // Compare with Gouy-Chapman at surface
-    auto phi_gc = solver.gouy_chapman_solution(params.phi_left);
-    double max_error = 0.0;
-    for (size_t i = 0; i < phi.size(); ++i) {
-        max_error = std::max(max_error, std::abs(phi[i] - phi_gc[i]));
-    }
-    std::cout << "\nComparison with Gouy-Chapman theory:\n";
-    std::cout << "  Maximum potential error: " << max_error * 1000.0 << " mV\n";
+    // Compute error metrics against Gouy-Chapman theory
+    double L2_error = solver.compute_L2_error();
+    double L2_rel_error = solver.compute_relative_L2_error();
+    double Linf_error = solver.compute_Linf_error();
+
+    std::cout << "\nError Analysis (vs. Gouy-Chapman theory):\n";
+    std::cout << "  L2 error:          " << L2_error * 1000.0 << " mV\n";
+    std::cout << "  Relative L2 error: " << L2_rel_error * 100.0 << " %\n";
+    std::cout << "  L-inf (max) error: " << Linf_error * 1000.0 << " mV\n";
 
     std::cout << "\nResults saved to: " << output_file << "\n";
     std::cout << "Use 'python3 scripts/plot_results.py' to visualize.\n";

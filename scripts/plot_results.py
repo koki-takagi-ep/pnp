@@ -155,12 +155,45 @@ def plot_combined(data, output_dir):
     print("Saved: combined_results.png/svg")
 
 
+def compute_error_metrics(data):
+    """Compute L2 and L-infinity error metrics."""
+    phi_num = data['phi_mV']
+    phi_gc = data['phi_gc_mV']
+
+    error = phi_num - phi_gc
+
+    # L2 error (RMS)
+    L2_error = np.sqrt(np.mean(error**2))
+
+    # Relative L2 error
+    L2_ref = np.sqrt(np.mean(phi_gc**2))
+    L2_rel = L2_error / L2_ref if L2_ref > 1e-10 else 0.0
+
+    # L-infinity error (max)
+    Linf_error = np.max(np.abs(error))
+
+    return {
+        'L2': L2_error,
+        'L2_rel': L2_rel,
+        'Linf': Linf_error
+    }
+
+
 def plot_error_analysis(data, output_dir):
     """Plot error analysis comparing PNP with Gouy-Chapman."""
     fig, ax = plt.subplots(figsize=(6, 4.5))
 
     error = np.abs(data['phi_mV'] - data['phi_gc_mV'])
     ax.plot(data['x_norm'], error, 'k-', linewidth=1.5)
+
+    # Compute and display error metrics
+    metrics = compute_error_metrics(data)
+    textstr = (f"$L_2$ error: {metrics['L2']:.3f} mV\n"
+               f"$L_2$ rel: {metrics['L2_rel']*100:.2f}%\n"
+               f"$L_\\infty$ error: {metrics['Linf']:.3f} mV")
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+    ax.text(0.95, 0.95, textstr, transform=ax.transAxes, fontsize=9,
+            verticalalignment='top', horizontalalignment='right', bbox=props)
 
     ax.set_xlabel(r'$x / \lambda_D$', fontsize=11, fontweight='bold')
     ax.set_ylabel(r'$|\phi_{PNP} - \phi_{GC}|$ [mV]', fontsize=11, fontweight='bold')
@@ -211,6 +244,15 @@ def main():
 
     print(f"Loading data from: {result_file}")
     data = load_data(result_file)
+
+    # Compute and print error metrics
+    metrics = compute_error_metrics(data)
+    print("\n========================================")
+    print("  Error Analysis (vs. Gouy-Chapman)")
+    print("========================================")
+    print(f"  L2 error:          {metrics['L2']:.4f} mV")
+    print(f"  Relative L2 error: {metrics['L2_rel']*100:.4f} %")
+    print(f"  L-inf (max) error: {metrics['Linf']:.4f} mV")
 
     output_dir = results_dir
     output_dir.mkdir(exist_ok=True)

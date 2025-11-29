@@ -36,6 +36,14 @@ struct PhysicalConstants {
 };
 
 /**
+ * @brief Model type for the solver
+ */
+enum class ModelType {
+    STANDARD_PB,     // Standard Poisson-Boltzmann
+    BIKERMAN         // Modified PB with steric effects (Bikerman model)
+};
+
+/**
  * @brief Parameters for the PNP solver
  */
 struct PNPParameters {
@@ -64,6 +72,12 @@ struct PNPParameters {
     // Grid stretching parameter (higher = more clustering near interface)
     double grid_stretch;
 
+    // Model selection
+    ModelType model;    // Standard PB or Modified (Bikerman)
+
+    // Ion size parameters for Bikerman model
+    double a;           // Ion diameter [m]
+
     // Default constructor with typical values for ionic liquids
     PNPParameters()
         : L(100e-9)       // 100 nm domain
@@ -81,6 +95,8 @@ struct PNPParameters {
         , max_iter(1000)
         , omega(0.3)
         , grid_stretch(3.0)  // Stretching factor for non-uniform grid
+        , model(ModelType::STANDARD_PB)
+        , a(0.7e-9)       // ~0.7 nm typical ion diameter for ionic liquids
     {}
 };
 
@@ -108,6 +124,34 @@ public:
     void save_results(const std::string& filename) const;
     const std::vector<double>& get_residual_history() const { return residual_history_; }
 
+    /**
+     * @brief Compute L2 error norm against Gouy-Chapman solution
+     * @return L2 norm error in volts
+     */
+    double compute_L2_error() const;
+
+    /**
+     * @brief Compute relative L2 error norm
+     * @return Relative L2 error (dimensionless)
+     */
+    double compute_relative_L2_error() const;
+
+    /**
+     * @brief Compute L-infinity (max) error
+     * @return Maximum absolute error in volts
+     */
+    double compute_Linf_error() const;
+
+    /**
+     * @brief Get the packing fraction for Bikerman model
+     */
+    double get_packing_fraction() const { return nu_; }
+
+    /**
+     * @brief Get model name as string
+     */
+    std::string get_model_name() const;
+
 private:
     PNPParameters params_;
 
@@ -126,6 +170,7 @@ private:
     double eps_;       // Permittivity [F/m]
     double lambda_D_;  // Debye length [m]
     double phi_T_;     // Thermal voltage [V]
+    double nu_;        // Packing fraction for Bikerman model
 
     void initialize();
     void create_nonuniform_grid();

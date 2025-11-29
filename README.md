@@ -7,6 +7,9 @@ A C++ implementation of the Poisson-Nernst-Planck (PNP) equations for simulating
 - Newton-Raphson solver for the nonlinear Poisson-Boltzmann equation
 - Non-uniform grid with clustering near the interface
 - Gouy-Chapman analytical solution for validation
+- **Bikerman model** for steric effects (ion size exclusion)
+- **Transient solver** using implicit Scharfetter-Gummel scheme
+- L2/L-infinity error analysis
 - Python visualization scripts
 
 ## Theory
@@ -83,6 +86,39 @@ Or equivalently:
 φ(x) = (4 k_B T / e) arctanh[tanh(eφ₀/(4k_B T)) exp(-x/λ_D)]
 ```
 
+### Bikerman Model (Modified Poisson-Boltzmann)
+
+The standard Poisson-Boltzmann equation predicts unphysically high concentrations near charged surfaces. The Bikerman model introduces steric effects by accounting for finite ion size.
+
+**Modified Boltzmann Distribution**:
+```
+c_± = c₀ exp(∓ψ) / g(ψ)
+```
+
+where the crowding function is:
+```
+g(ψ) = 1 - ν + ν cosh(ψ)
+```
+
+**Packing Fraction**:
+```
+ν = 2 a³ c₀ N_A
+```
+
+where `a` is the ion diameter (typically 0.5-1.0 nm for ionic liquids).
+
+**Modified Poisson-Boltzmann Equation**:
+```
+d²ψ/dξ² = sinh(ψ) / g(ψ)
+```
+
+**Physical Interpretation**:
+- At low potentials (|ψ| << 1): g(ψ) ≈ 1, reduces to standard PB
+- At high potentials: g(ψ) limits the maximum concentration to ~1/ν × c₀
+- Prevents unphysical crowding where c > 1/(a³ N_A)
+
+**Reference**: Kilic, Bazant & Ajdari, *Phys. Rev. E* 75, 021502 (2007)
+
 ## Numerical Method
 
 ### Discretization
@@ -127,7 +163,7 @@ J · δφ = -F
 ```
 where α ∈ (0, 1] is an adaptive damping factor for stability.
 
-### Algorithm
+### Algorithm (Steady-State)
 
 1. Initialize with Gouy-Chapman analytical solution
 2. Build Jacobian matrix and residual vector
@@ -135,6 +171,35 @@ where α ∈ (0, 1] is an adaptive damping factor for stability.
 4. Update solution with adaptive damping
 5. Check convergence (relative change < tolerance)
 6. Repeat until converged
+
+### Transient Solver
+
+The transient solver uses an implicit scheme for stability:
+
+**Time Discretization**:
+```
+(c_i^{n+1} - c_i^n) / Δt = D ∂/∂x [∂c/∂x + z e c/(kT) ∂φ/∂x]
+```
+
+**Scharfetter-Gummel Scheme**:
+
+For drift-diffusion problems, the Scharfetter-Gummel scheme provides stable discretization:
+```
+J_{i+1/2} = D/Δx [B(v Δx) c_{i+1} - B(-v Δx) c_i]
+```
+
+where `B(x) = x/(exp(x)-1)` is the Bernoulli function and `v = zeE/(kT)`.
+
+**Algorithm at Each Time Step**:
+1. Solve quasi-static Poisson equation for φ
+2. Update c₊ using implicit Nernst-Planck with Scharfetter-Gummel
+3. Update c₋ using implicit Nernst-Planck with Scharfetter-Gummel
+4. Check for steady state (Δc/c₀ < tolerance)
+
+**Characteristic Time Scale**:
+```
+τ_D = λ_D² / D ≈ 0.1-1 ns (for typical ionic liquids)
+```
 
 ## Building and Running
 
@@ -152,18 +217,29 @@ make
 ### Run
 
 ```bash
-# Default parameters (1 M, 100 mV)
+# Default parameters (1 M, 100 mV, steady-state)
 make run
 
-# Custom parameters
-./build/pnp_solver --c0 0.1 --phi0 50 --output results/custom.dat
+# Standard Poisson-Boltzmann
+./build/pnp_solver --c0 0.1 --phi0 100 --output results/standard.dat
+
+# Bikerman model with steric effects
+./build/pnp_solver --c0 0.1 --phi0 100 --model bikerman --ion-size 0.7 --output results/bikerman.dat
+
+# Transient simulation
+./build/pnp_solver --c0 0.1 --phi0 100 --transient --dt 0.1 --t-final 1.0 --output results/transient.dat
 
 # Available options:
-#   --phi0 <value>    Surface potential in mV (default: 100)
-#   --c0 <value>      Bulk concentration in mol/L (default: 1.0)
-#   --eps <value>     Relative permittivity (default: 12)
-#   --L <value>       Domain length in nm (default: 100)
-#   --N <value>       Number of grid points (default: 501)
+#   --phi0 <value>      Surface potential in mV (default: 100)
+#   --c0 <value>        Bulk concentration in mol/L (default: 1.0)
+#   --eps <value>       Relative permittivity (default: 12)
+#   --L <value>         Domain length in nm (default: 100)
+#   --N <value>         Number of grid points (default: 1001)
+#   --model <type>      Model: standard or bikerman (default: standard)
+#   --ion-size <value>  Ion diameter in nm for Bikerman (default: 0.7)
+#   --transient         Run transient simulation
+#   --dt <value>        Time step in ns (default: 0.1)
+#   --t-final <value>   Final time in microseconds (default: 1.0)
 ```
 
 ### Visualize
@@ -173,6 +249,25 @@ python3 scripts/plot_results.py
 ```
 
 ## Results
+
+### Error Metrics
+
+The solver computes the following error metrics against the Gouy-Chapman analytical solution:
+
+**L2 Error (RMS)**:
+```
+L2 = √(Σ(φ_num - φ_GC)² / N)
+```
+
+**Relative L2 Error**:
+```
+L2_rel = L2 / √(Σφ_GC² / N)
+```
+
+**L-infinity Error (Maximum)**:
+```
+L∞ = max|φ_num - φ_GC|
+```
 
 ### Validation with Gouy-Chapman Theory
 
@@ -185,7 +280,9 @@ The numerical solution is validated against the analytical Gouy-Chapman solution
 | Debye length | 0.376 nm |
 | Thermal voltage | 25.7 mV |
 | Normalized potential | 3.89 |
-| Maximum error | ~4 mV |
+| L2 error | ~1.5 mV |
+| Relative L2 error | ~3.5% |
+| L∞ (max) error | ~4 mV |
 | Convergence | 4 iterations |
 
 ### Electric Double Layer Structure
@@ -220,15 +317,15 @@ pnp/
 
 ## Future Work
 
-1. **Modified PNP**: Implement ion size effects following Bazant et al. (2014 PRL)
-   - Bikerman model for steric effects
-   - Carnahan-Starling equation of state
+1. **Carnahan-Starling model**: More accurate equation of state for hard spheres
 
 2. **2D/3D extension**: Extend to higher dimensions for more complex geometries
 
-3. **Time-dependent solver**: Full transient PNP for dynamics
+3. **Applied voltage**: Non-equilibrium steady states with current flow
 
-4. **Applied voltage**: Non-equilibrium steady states with current flow
+4. **Asymmetric ions**: Different sizes for cations and anions
+
+5. **Multiple species**: Extension to multi-component electrolytes
 
 ## References
 

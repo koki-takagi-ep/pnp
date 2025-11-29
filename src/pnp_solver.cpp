@@ -29,15 +29,33 @@ PNPSolver1D::PNPSolver1D(const PNPParameters& params)
     lambda_D_ = std::sqrt(eps_ * PhysicalConstants::kB * params_.T /
                           (2.0 * PhysicalConstants::e * PhysicalConstants::e * c0_particles));
 
+    // Compute packing fraction for Bikerman model: ν = 2 * a³ * c0 * NA
+    // a is ion diameter, factor of 2 for both + and - ions
+    double a3 = params_.a * params_.a * params_.a;
+    nu_ = 2.0 * a3 * params_.c0 * PhysicalConstants::NA;
+
     std::cout << "========================================\n";
     std::cout << "  1D PNP Solver Initialization\n";
     std::cout << "========================================\n";
+    std::cout << "  Model: " << get_model_name() << "\n";
     std::cout << "  Debye length: " << lambda_D_ * 1e9 << " nm\n";
     std::cout << "  Thermal voltage: " << phi_T_ * 1000.0 << " mV\n";
+    if (params_.model == ModelType::BIKERMAN) {
+        std::cout << "  Ion diameter: " << params_.a * 1e9 << " nm\n";
+        std::cout << "  Packing fraction: " << nu_ << "\n";
+    }
     std::cout << "  Grid points: " << params_.N << "\n";
     std::cout << "  Grid stretching: " << params_.grid_stretch << "\n";
 
     initialize();
+}
+
+std::string PNPSolver1D::get_model_name() const {
+    switch (params_.model) {
+        case ModelType::STANDARD_PB: return "Standard Poisson-Boltzmann";
+        case ModelType::BIKERMAN: return "Modified PB (Bikerman steric model)";
+        default: return "Unknown";
+    }
 }
 
 void PNPSolver1D::create_nonuniform_grid() {
@@ -106,8 +124,21 @@ void PNPSolver1D::initialize() {
 void PNPSolver1D::update_concentrations_from_phi() {
     for (int i = 0; i < params_.N; ++i) {
         double phi_norm = std::clamp(phi_[i] / phi_T_, -50.0, 50.0);
-        c_plus_[i] = params_.c0 * std::exp(-params_.z_plus * phi_norm);
-        c_minus_[i] = params_.c0 * std::exp(-params_.z_minus * phi_norm);
+
+        if (params_.model == ModelType::BIKERMAN) {
+            // Bikerman model: c± = c₀ * exp(∓ψ) / g(ψ)
+            // where g(ψ) = 1 - ν + ν*cosh(ψ)
+            double cosh_val = std::cosh(phi_norm);
+            double g = 1.0 - nu_ + nu_ * cosh_val;
+            g = std::max(g, 0.01);
+
+            c_plus_[i] = params_.c0 * std::exp(-params_.z_plus * phi_norm) / g;
+            c_minus_[i] = params_.c0 * std::exp(-params_.z_minus * phi_norm) / g;
+        } else {
+            // Standard Boltzmann distribution
+            c_plus_[i] = params_.c0 * std::exp(-params_.z_plus * phi_norm);
+            c_minus_[i] = params_.c0 * std::exp(-params_.z_minus * phi_norm);
+        }
     }
 }
 
@@ -193,9 +224,6 @@ bool PNPSolver1D::solve() {
     residual_history_.clear();
 
     for (int iter = 0; iter < params_.max_iter; ++iter) {
-        // Build Jacobian and residual for Newton step on non-uniform grid
-        // F(φ) = d²φ/dx² - κ²*φ_T*sinh(φ/φ_T) = 0
-
         std::vector<double> a(n, 0.0), b(n, 0.0), c(n, 0.0), rhs(n, 0.0);
 
         // Left boundary (Dirichlet)
@@ -212,17 +240,44 @@ bool PNPSolver1D::solve() {
             double sinh_val = std::sinh(phi_norm);
             double cosh_val = std::cosh(phi_norm);
 
-            // Jacobian entries for non-uniform grid
-            // d²φ/dx² ≈ [φ(i+1) - φ(i)]/dx+ - [φ(i) - φ(i-1)]/dx- ] / dx_avg
-            a[i] = 1.0 / (dx_minus * dx_avg);                    // coeff for φ[i-1]
-            c[i] = 1.0 / (dx_plus * dx_avg);                     // coeff for φ[i+1]
-            b[i] = -1.0 / (dx_minus * dx_avg) - 1.0 / (dx_plus * dx_avg) - kappa2 * cosh_val;  // coeff for φ[i]
+            // Laplacian coefficient for non-uniform grid
+            double lap_minus = 1.0 / (dx_minus * dx_avg);  // coeff for φ[i-1]
+            double lap_plus = 1.0 / (dx_plus * dx_avg);    // coeff for φ[i+1]
+            double lap_center = -lap_minus - lap_plus;      // coeff for φ[i]
 
-            // Residual
+            // Laplacian value
             double laplacian = (phi_[i + 1] - phi_[i]) / dx_plus - (phi_[i] - phi_[i - 1]) / dx_minus;
             laplacian /= dx_avg;
 
-            rhs[i] = -(laplacian - kappa2 * phi_T_ * sinh_val);
+            double source_term, jacobian_term;
+
+            if (params_.model == ModelType::BIKERMAN) {
+                // Bikerman model with steric effects
+                // F(φ) = d²φ/dx² - κ²*φ_T*sinh(ψ) / g(ψ) = 0
+                // where g(ψ) = 1 - ν + ν*cosh(ψ)
+                double g = 1.0 - nu_ + nu_ * cosh_val;
+                g = std::max(g, 0.01);  // Prevent division by zero
+
+                source_term = kappa2 * phi_T_ * sinh_val / g;
+
+                // Jacobian: dF/dφ = d²/dx² - κ² * (cosh(ψ) - ν*(cosh(ψ) - 1)) / g²
+                double dg_dpsi = nu_ * sinh_val;
+                double df_dpsi = (cosh_val * g - sinh_val * dg_dpsi) / (g * g);
+                jacobian_term = kappa2 * df_dpsi;
+            } else {
+                // Standard Poisson-Boltzmann
+                // F(φ) = d²φ/dx² - κ²*φ_T*sinh(ψ) = 0
+                source_term = kappa2 * phi_T_ * sinh_val;
+                jacobian_term = kappa2 * cosh_val;
+            }
+
+            // Jacobian matrix entries
+            a[i] = lap_minus;
+            c[i] = lap_plus;
+            b[i] = lap_center - jacobian_term;
+
+            // Residual: -F
+            rhs[i] = -(laplacian - source_term);
         }
 
         // Right boundary (Dirichlet)
@@ -270,15 +325,167 @@ bool PNPSolver1D::solve() {
 }
 
 void PNPSolver1D::solve_transient(double dt, double t_final) {
+    /**
+     * Transient PNP solver using implicit time stepping
+     *
+     * Equations:
+     *   ∂c±/∂t = D± ∂/∂x [∂c±/∂x ± (e c±)/(kT) ∂φ/∂x]
+     *   ∇²φ = -ρ/ε  (quasi-static Poisson)
+     *
+     * Algorithm at each time step:
+     *   1. Solve Poisson equation for φ given current c±
+     *   2. Update c± using implicit Nernst-Planck discretization
+     *   3. Repeat until steady state or t_final reached
+     */
+
     int n_steps = static_cast<int>(t_final / dt);
-    std::cout << "Starting transient solver: " << n_steps << " time steps\n";
+    int n = params_.N;
+    double e = PhysicalConstants::e;
+    double kT = PhysicalConstants::kB * params_.T;
+
+    std::cout << "\n========================================\n";
+    std::cout << "  Starting Transient Solver\n";
+    std::cout << "========================================\n";
+    std::cout << "  Time step: " << dt * 1e9 << " ns\n";
+    std::cout << "  Total time: " << t_final * 1e6 << " µs\n";
+    std::cout << "  Number of steps: " << n_steps << "\n";
+
+    // Store previous concentrations for convergence check
+    std::vector<double> c_plus_old(n), c_minus_old(n);
 
     for (int step = 0; step < n_steps; ++step) {
-        solve();
-        if (step % 1000 == 0) {
-            std::cout << "Time step " << step << " / " << n_steps << "\n";
+        // Store old values
+        c_plus_old = c_plus_;
+        c_minus_old = c_minus_;
+
+        // Step 1: Solve Poisson equation (quasi-static assumption)
+        // Use a few Newton iterations for Poisson
+        for (int newton_iter = 0; newton_iter < 20; ++newton_iter) {
+            std::vector<double> a(n, 0.0), b(n, 0.0), c(n, 0.0), rhs(n, 0.0);
+
+            b[0] = 1.0;
+            rhs[0] = 0.0;
+
+            for (int i = 1; i < n - 1; ++i) {
+                double dx_plus = x_[i + 1] - x_[i];
+                double dx_minus = x_[i] - x_[i - 1];
+                double dx_avg = 0.5 * (dx_plus + dx_minus);
+
+                // Charge density from current concentrations
+                double rho_i = PhysicalConstants::NA * e *
+                               (params_.z_plus * c_plus_[i] + params_.z_minus * c_minus_[i]);
+
+                double lap_minus = 1.0 / (dx_minus * dx_avg);
+                double lap_plus = 1.0 / (dx_plus * dx_avg);
+                double lap_center = -lap_minus - lap_plus;
+
+                double laplacian = (phi_[i + 1] - phi_[i]) / dx_plus
+                                 - (phi_[i] - phi_[i - 1]) / dx_minus;
+                laplacian /= dx_avg;
+
+                a[i] = lap_minus;
+                c[i] = lap_plus;
+                b[i] = lap_center;
+                rhs[i] = rho_i / eps_ - laplacian;
+            }
+
+            b[n - 1] = 1.0;
+            rhs[n - 1] = 0.0;
+
+            std::vector<double> delta_phi = solve_tridiagonal(a, b, c, rhs);
+
+            double max_delta = 0.0;
+            for (int i = 1; i < n - 1; ++i) {
+                phi_[i] += delta_phi[i];
+                max_delta = std::max(max_delta, std::abs(delta_phi[i]));
+            }
+
+            if (max_delta < 1e-10) break;
+        }
+
+        // Step 2: Update concentrations using implicit Nernst-Planck
+        // For cations: ∂c+/∂t = D+ ∂/∂x [∂c+/∂x + (e c+)/(kT) ∂φ/∂x]
+        for (int species = 0; species < 2; ++species) {
+            double D = (species == 0) ? params_.D_plus : params_.D_minus;
+            int z = (species == 0) ? params_.z_plus : params_.z_minus;
+            std::vector<double>& conc = (species == 0) ? c_plus_ : c_minus_;
+            const std::vector<double>& conc_old = (species == 0) ? c_plus_old : c_minus_old;
+
+            std::vector<double> a(n, 0.0), b(n, 0.0), c_vec(n, 0.0), rhs(n, 0.0);
+
+            // Left boundary: zero flux (Neumann) - reflective
+            // ∂c/∂x + z*e*c/(kT) * ∂φ/∂x = 0
+            double dx0 = x_[1] - x_[0];
+            double dphi_dx0 = (phi_[1] - phi_[0]) / dx0;
+            double flux_coeff = z * e / kT * dphi_dx0;
+
+            b[0] = 1.0 + dt * D / (dx0 * dx0) - dt * D * flux_coeff / dx0;
+            c_vec[0] = -dt * D / (dx0 * dx0);
+            rhs[0] = conc_old[0];
+
+            // Interior points: implicit discretization
+            for (int i = 1; i < n - 1; ++i) {
+                double dx_plus = x_[i + 1] - x_[i];
+                double dx_minus = x_[i] - x_[i - 1];
+                double dx_avg = 0.5 * (dx_plus + dx_minus);
+
+                // Electric field at cell faces
+                double E_plus = -(phi_[i + 1] - phi_[i]) / dx_plus;
+                double E_minus = -(phi_[i] - phi_[i - 1]) / dx_minus;
+
+                // Scharfetter-Gummel scheme for drift-diffusion
+                double v_plus = z * e * E_plus / kT;  // Drift velocity / D
+                double v_minus = z * e * E_minus / kT;
+
+                double B_plus_p = bernoulli(v_plus * dx_plus);
+                double B_plus_m = bernoulli(-v_plus * dx_plus);
+                double B_minus_p = bernoulli(v_minus * dx_minus);
+                double B_minus_m = bernoulli(-v_minus * dx_minus);
+
+                double alpha = D * dt / (dx_avg * dx_avg);
+
+                a[i] = -alpha * B_minus_p / dx_minus * dx_avg;
+                c_vec[i] = -alpha * B_plus_m / dx_plus * dx_avg;
+                b[i] = 1.0 + alpha * (B_minus_m / dx_minus + B_plus_p / dx_plus) * dx_avg;
+                rhs[i] = conc_old[i];
+            }
+
+            // Right boundary: bulk concentration (Dirichlet)
+            b[n - 1] = 1.0;
+            rhs[n - 1] = params_.c0;
+
+            conc = solve_tridiagonal(a, b, c_vec, rhs);
+
+            // Ensure non-negative concentrations
+            for (int i = 0; i < n; ++i) {
+                conc[i] = std::max(conc[i], 1e-10 * params_.c0);
+            }
+        }
+
+        // Print progress
+        if (step % std::max(1, n_steps / 20) == 0 || step == n_steps - 1) {
+            double max_change_plus = 0.0, max_change_minus = 0.0;
+            for (int i = 0; i < n; ++i) {
+                max_change_plus = std::max(max_change_plus,
+                    std::abs(c_plus_[i] - c_plus_old[i]) / params_.c0);
+                max_change_minus = std::max(max_change_minus,
+                    std::abs(c_minus_[i] - c_minus_old[i]) / params_.c0);
+            }
+
+            double time_us = (step + 1) * dt * 1e6;
+            std::cout << "  t = " << std::fixed << std::setprecision(3) << time_us
+                      << " µs: Δc+/c0 = " << std::scientific << std::setprecision(2)
+                      << max_change_plus << ", Δc-/c0 = " << max_change_minus << "\n";
+
+            // Check for steady state
+            if (max_change_plus < 1e-8 && max_change_minus < 1e-8) {
+                std::cout << "  Steady state reached at step " << step << "\n";
+                break;
+            }
         }
     }
+
+    std::cout << "  Transient simulation completed.\n";
 }
 
 double PNPSolver1D::get_debye_length() const {
@@ -363,6 +570,51 @@ void PNPSolver1D::save_results(const std::string& filename) const {
 
     file.close();
     std::cout << "Results saved to " << filename << "\n";
+}
+
+double PNPSolver1D::compute_L2_error() const {
+    // L2 error = sqrt(mean((phi - phi_GC)^2))
+    std::vector<double> phi_gc = gouy_chapman_solution(params_.phi_left);
+
+    double sum_sq = 0.0;
+    for (int i = 0; i < params_.N; ++i) {
+        double diff = phi_[i] - phi_gc[i];
+        sum_sq += diff * diff;
+    }
+
+    return std::sqrt(sum_sq / params_.N);
+}
+
+double PNPSolver1D::compute_relative_L2_error() const {
+    // Relative L2 error = L2 / sqrt(mean(phi_GC^2))
+    std::vector<double> phi_gc = gouy_chapman_solution(params_.phi_left);
+
+    double sum_sq_error = 0.0;
+    double sum_sq_ref = 0.0;
+
+    for (int i = 0; i < params_.N; ++i) {
+        double diff = phi_[i] - phi_gc[i];
+        sum_sq_error += diff * diff;
+        sum_sq_ref += phi_gc[i] * phi_gc[i];
+    }
+
+    if (sum_sq_ref < 1e-30) {
+        return 0.0;
+    }
+
+    return std::sqrt(sum_sq_error / sum_sq_ref);
+}
+
+double PNPSolver1D::compute_Linf_error() const {
+    // L-infinity error = max(|phi - phi_GC|)
+    std::vector<double> phi_gc = gouy_chapman_solution(params_.phi_left);
+
+    double max_error = 0.0;
+    for (int i = 0; i < params_.N; ++i) {
+        max_error = std::max(max_error, std::abs(phi_[i] - phi_gc[i]));
+    }
+
+    return max_error;
 }
 
 } // namespace pnp
