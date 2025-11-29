@@ -1,0 +1,24 @@
+# Build artifacts
+build/
+*.o
+*.a
+
+# Results (keep .dat and images for documentation)
+# Uncomment to ignore:
+# results/*.dat
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
