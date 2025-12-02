@@ -5,6 +5,8 @@ Style reference: koki-takagi-ep/fluid
 """
 
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
 from pathlib import Path
