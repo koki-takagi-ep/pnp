@@ -12,10 +12,30 @@ make clean        # Clean build artifacts
 # Run with specific options
 ./build/pnp_solver --phi0 100 --phi-right 0 --closed-system --c0 1.0
 
+# Transient solvers
+./build/pnp_solver --gummel --dt 0.01 --t-final 0.2    # Gummel iteration
+./build/pnp_solver --slotboom --dt 0.01 --t-final 0.2  # Slotboom transformation
+./build/pnp_solver --shenxu --dt 0.01 --t-final 0.2    # Shen-Xu positivity-preserving
+
+# Bikerman model (steric effects)
+./build/pnp_solver --model bikerman --ion-size 0.7
+
 # Python environment (use .venv)
 source .venv/bin/activate
 python3 scripts/plot_dual_electrode.py
 ```
+
+## Key CLI Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--phi0 <mV>` | Left electrode potential | 100 |
+| `--phi-right <mV>` | Right electrode potential | 0 |
+| `--c0 <mol/L>` | Bulk concentration | 1.0 |
+| `--closed-system` | Zero-flux BC at both ends | off |
+| `--dual-electrode` | Symmetric grid for both electrodes | off |
+| `--model <type>` | standard or bikerman | standard |
+| `--N <points>` | Grid points | 1001 |
 
 ## Architecture Overview
 
