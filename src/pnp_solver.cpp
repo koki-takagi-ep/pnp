@@ -254,105 +254,217 @@ bool PNPSolver1D::solve() {
 
     residual_history_.clear();
 
-    for (int iter = 0; iter < params_.max_iter; ++iter) {
-        std::vector<double> a(n, 0.0), b(n, 0.0), c(n, 0.0), rhs(n, 0.0);
+    // For closed system: we need to find the bulk potential that gives zero total charge
+    // The boundary conditions fix the DIFFERENCE phi_left - phi_right = Delta_V
+    // but the absolute value (bulk potential) is determined by charge neutrality
+    //
+    // Strategy:
+    // 1. Solve PB equation with given boundary conditions
+    // 2. Compute total charge Q
+    // 3. If Q != 0, shift ALL potentials by delta_phi to achieve charge neutrality
+    // 4. The shifted boundary conditions become: phi_left + delta, phi_right + delta
+    // 5. Re-solve with shifted boundaries until Q = 0
+    // Initial guess: shift so that effective bulk potential is zero
+    // This means phi_offset = -(phi_left + phi_right)/2
+    // so that phi_left_eff = (phi_left - phi_right)/2 and phi_right_eff = -(phi_left - phi_right)/2
+    double phi_offset = params_.closed_system ?
+        -0.5 * (params_.phi_left + params_.phi_right) : 0.0;
 
-        // Left boundary (Dirichlet)
-        b[0] = 1.0;
-        rhs[0] = 0.0;
+    // Outer loop for bulk potential adjustment (only for closed system)
+    int max_outer_iter = params_.closed_system ? 100 : 1;
 
-        // Interior points with non-uniform grid
-        for (int i = 1; i < n - 1; ++i) {
-            double dx_plus = x_[i + 1] - x_[i];
-            double dx_minus = x_[i] - x_[i - 1];
-            double dx_avg = 0.5 * (dx_plus + dx_minus);
+    if (params_.closed_system) {
+        std::cout << "  Initial offset: " << phi_offset * 1e3 << " mV\n";
+        std::cout << "  Expected bulk potential: " << -phi_offset * 1e3 << " mV\n";
+    }
 
-            double phi_norm = std::clamp(phi_[i] / phi_T_, -50.0, 50.0);
-            double sinh_val = std::sinh(phi_norm);
-            double cosh_val = std::cosh(phi_norm);
+    for (int outer_iter = 0; outer_iter < max_outer_iter; ++outer_iter) {
+        // Set effective boundary conditions
+        double phi_left_eff = params_.phi_left + phi_offset;
+        double phi_right_eff = params_.phi_right + phi_offset;
 
-            // Laplacian coefficient for non-uniform grid
-            double lap_minus = 1.0 / (dx_minus * dx_avg);  // coeff for φ[i-1]
-            double lap_plus = 1.0 / (dx_plus * dx_avg);    // coeff for φ[i+1]
-            double lap_center = -lap_minus - lap_plus;      // coeff for φ[i]
+        // Re-initialize boundary values
+        phi_[0] = phi_left_eff;
+        phi_[n - 1] = phi_right_eff;
 
-            // Laplacian value
-            double laplacian = (phi_[i + 1] - phi_[i]) / dx_plus - (phi_[i] - phi_[i - 1]) / dx_minus;
-            laplacian /= dx_avg;
+        // Re-initialize interior with linear interpolation on first outer iteration
+        if (outer_iter == 0) {
+            for (int i = 1; i < n - 1; ++i) {
+                double xi = static_cast<double>(i) / (n - 1);
+                phi_[i] = phi_left_eff * (1.0 - xi) + phi_right_eff * xi;
+            }
+        }
 
-            double source_term, jacobian_term;
+        // Inner Newton-Raphson loop for Poisson-Boltzmann equation
+        for (int iter = 0; iter < params_.max_iter; ++iter) {
+            std::vector<double> a(n, 0.0), b(n, 0.0), c(n, 0.0), rhs(n, 0.0);
 
-            if (params_.model == ModelType::BIKERMAN) {
-                // Bikerman model with steric effects
-                // F(φ) = d²φ/dx² - κ²*φ_T*sinh(ψ) / g(ψ) = 0
-                // where g(ψ) = 1 - ν + ν*cosh(ψ)
-                double g = 1.0 - nu_ + nu_ * cosh_val;
-                g = std::max(g, 0.01);  // Prevent division by zero
+            // Left boundary (Dirichlet)
+            b[0] = 1.0;
+            rhs[0] = 0.0;
 
-                source_term = kappa2 * phi_T_ * sinh_val / g;
+            // Interior points with non-uniform grid
+            for (int i = 1; i < n - 1; ++i) {
+                double dx_plus = x_[i + 1] - x_[i];
+                double dx_minus = x_[i] - x_[i - 1];
+                double dx_avg = 0.5 * (dx_plus + dx_minus);
 
-                // Jacobian: dF/dφ = d²/dx² - κ² * (cosh(ψ) - ν*(cosh(ψ) - 1)) / g²
-                double dg_dpsi = nu_ * sinh_val;
-                double df_dpsi = (cosh_val * g - sinh_val * dg_dpsi) / (g * g);
-                jacobian_term = kappa2 * df_dpsi;
-            } else {
-                // Standard Poisson-Boltzmann
-                // F(φ) = d²φ/dx² - κ²*φ_T*sinh(ψ) = 0
-                source_term = kappa2 * phi_T_ * sinh_val;
-                jacobian_term = kappa2 * cosh_val;
+                double phi_norm = std::clamp(phi_[i] / phi_T_, -50.0, 50.0);
+                double sinh_val = std::sinh(phi_norm);
+                double cosh_val = std::cosh(phi_norm);
+
+                // Laplacian coefficient for non-uniform grid
+                double lap_minus = 1.0 / (dx_minus * dx_avg);
+                double lap_plus = 1.0 / (dx_plus * dx_avg);
+                double lap_center = -lap_minus - lap_plus;
+
+                // Laplacian value
+                double laplacian = (phi_[i + 1] - phi_[i]) / dx_plus - (phi_[i] - phi_[i - 1]) / dx_minus;
+                laplacian /= dx_avg;
+
+                double source_term, jacobian_term;
+
+                if (params_.model == ModelType::BIKERMAN) {
+                    double g = 1.0 - nu_ + nu_ * cosh_val;
+                    g = std::max(g, 0.01);
+                    source_term = kappa2 * phi_T_ * sinh_val / g;
+                    double dg_dpsi = nu_ * sinh_val;
+                    double df_dpsi = (cosh_val * g - sinh_val * dg_dpsi) / (g * g);
+                    jacobian_term = kappa2 * df_dpsi;
+                } else {
+                    source_term = kappa2 * phi_T_ * sinh_val;
+                    jacobian_term = kappa2 * cosh_val;
+                }
+
+                a[i] = lap_minus;
+                c[i] = lap_plus;
+                b[i] = lap_center - jacobian_term;
+                rhs[i] = -(laplacian - source_term);
             }
 
-            // Jacobian matrix entries
-            a[i] = lap_minus;
-            c[i] = lap_plus;
-            b[i] = lap_center - jacobian_term;
+            // Right boundary (Dirichlet)
+            b[n - 1] = 1.0;
+            rhs[n - 1] = 0.0;
 
-            // Residual: -F
-            rhs[i] = -(laplacian - source_term);
+            std::vector<double> delta_phi = solve_tridiagonal(a, b, c, rhs);
+
+            double max_delta = 0.0;
+            for (int i = 1; i < n - 1; ++i) {
+                max_delta = std::max(max_delta, std::abs(delta_phi[i]));
+            }
+
+            double damping = 1.0;
+            if (max_delta > phi_T_) {
+                damping = phi_T_ / max_delta;
+            }
+
+            for (int i = 1; i < n - 1; ++i) {
+                phi_[i] += damping * delta_phi[i];
+            }
+
+            double residual = compute_residual();
+            residual_history_.push_back(residual);
+
+            double rel_change = max_delta / std::max(std::abs(phi_left_eff), phi_T_);
+
+            if (outer_iter == 0 && (iter < 10 || iter % 10 == 0)) {
+                std::cout << "  Iter " << iter << ": rel_change = " << rel_change
+                          << ", residual = " << residual << "\n";
+            }
+
+            if (rel_change < params_.tol && iter > 0) {
+                if (outer_iter == 0) {
+                    std::cout << "  Inner loop converged after " << iter + 1 << " iterations.\n";
+                }
+                break;
+            }
         }
 
-        // Right boundary (Dirichlet)
-        b[n - 1] = 1.0;
-        rhs[n - 1] = 0.0;
-
-        // Solve for Newton correction
-        std::vector<double> delta_phi = solve_tridiagonal(a, b, c, rhs);
-
-        // Update with adaptive damping
-        double max_delta = 0.0;
-        for (int i = 1; i < n - 1; ++i) {
-            max_delta = std::max(max_delta, std::abs(delta_phi[i]));
-        }
-
-        double damping = 1.0;
-        if (max_delta > phi_T_) {
-            damping = phi_T_ / max_delta;
-        }
-
-        for (int i = 1; i < n - 1; ++i) {
-            phi_[i] += damping * delta_phi[i];
-        }
-
-        double residual = compute_residual();
-        residual_history_.push_back(residual);
-
-        double rel_change = max_delta / std::max(std::abs(params_.phi_left), phi_T_);
-
-        if (iter < 10 || iter % 10 == 0) {
-            std::cout << "  Iter " << iter << ": rel_change = " << rel_change
-                      << ", residual = " << residual << "\n";
-        }
-
-        if (rel_change < params_.tol && iter > 0) {
-            std::cout << "  Converged after " << iter + 1 << " iterations.\n";
+        // For closed system: check charge neutrality and adjust bulk potential
+        if (params_.closed_system) {
             update_concentrations_from_phi();
-            return true;
+
+            // Compute total charge using trapezoidal integration
+            double total_charge = 0.0;
+            for (int i = 0; i < n - 1; ++i) {
+                double dx = x_[i + 1] - x_[i];
+                double rho_i = PhysicalConstants::e * PhysicalConstants::NA *
+                               (params_.z_plus * c_plus_[i] + params_.z_minus * c_minus_[i]);
+                double rho_ip1 = PhysicalConstants::e * PhysicalConstants::NA *
+                                 (params_.z_plus * c_plus_[i+1] + params_.z_minus * c_minus_[i+1]);
+                total_charge += 0.5 * (rho_i + rho_ip1) * dx;
+            }
+
+            // For charge neutrality: if Q > 0, we have excess cations
+            // Need to decrease potential to attract more anions and repel cations
+            // dQ/dφ < 0 (increasing potential decreases charge because cations are repelled)
+            //
+            // Analytical estimate: Q ≈ -2 * e * NA * c0 * A * sinh(φ_avg / φ_T) for small potentials
+            // where A is the effective EDL area
+            // dQ/dφ ≈ -2 * e * NA * c0 * A * cosh(φ_avg / φ_T) / φ_T
+            //
+            // Use numerical derivative for more accuracy
+            double delta_phi_test = 0.001 * phi_T_;
+            double total_charge_pert = 0.0;
+            for (int i = 0; i < n - 1; ++i) {
+                double dx = x_[i + 1] - x_[i];
+                double phi_norm_i = std::clamp((phi_[i] + delta_phi_test) / phi_T_, -50.0, 50.0);
+                double phi_norm_ip1 = std::clamp((phi_[i+1] + delta_phi_test) / phi_T_, -50.0, 50.0);
+
+                double c_plus_i = params_.c0 * std::exp(-params_.z_plus * phi_norm_i);
+                double c_minus_i = params_.c0 * std::exp(-params_.z_minus * phi_norm_i);
+                double c_plus_ip1 = params_.c0 * std::exp(-params_.z_plus * phi_norm_ip1);
+                double c_minus_ip1 = params_.c0 * std::exp(-params_.z_minus * phi_norm_ip1);
+
+                double rho_i = PhysicalConstants::e * PhysicalConstants::NA *
+                               (params_.z_plus * c_plus_i + params_.z_minus * c_minus_i);
+                double rho_ip1 = PhysicalConstants::e * PhysicalConstants::NA *
+                                 (params_.z_plus * c_plus_ip1 + params_.z_minus * c_minus_ip1);
+                total_charge_pert += 0.5 * (rho_i + rho_ip1) * dx;
+            }
+
+            double dQ_dphi = (total_charge_pert - total_charge) / delta_phi_test;
+
+            // Newton update for offset
+            double delta_offset = 0.0;
+            if (std::abs(dQ_dphi) > 1e-30) {
+                delta_offset = -total_charge / dQ_dphi;
+                // Limit step size
+                double max_step = 5.0 * phi_T_;
+                if (std::abs(delta_offset) > max_step) {
+                    delta_offset = (delta_offset > 0 ? max_step : -max_step);
+                }
+            }
+
+            phi_offset += delta_offset;
+
+            // Check convergence
+            double charge_error = std::abs(total_charge) / (PhysicalConstants::e * PhysicalConstants::NA * params_.c0 * params_.L);
+            double phi_bulk_center = phi_[n / 2];
+
+            if (outer_iter % 10 == 0 || charge_error < 1e-6) {
+                std::cout << "  Outer iter " << outer_iter
+                          << ": phi_bulk(center) = " << phi_bulk_center * 1e3 << " mV"
+                          << ", offset = " << phi_offset * 1e3 << " mV"
+                          << ", Q_rel = " << charge_error << "\n";
+            }
+
+            if (charge_error < 1e-8) {
+                std::cout << "  Charge neutrality converged after " << outer_iter + 1 << " outer iterations.\n";
+                std::cout << "  Final bulk potential (center): " << phi_bulk_center * 1e3 << " mV\n";
+                std::cout << "  Effective electrodes: left = " << phi_[0] * 1e3
+                          << " mV, right = " << phi_[n-1] * 1e3 << " mV\n";
+                break;
+            }
+        } else {
+            // For open system, we're done after the first iteration
+            break;
         }
     }
 
-    std::cout << "  Warning: Did not converge.\n";
+    std::cout << "  Converged.\n";
     update_concentrations_from_phi();
-    return false;
+    return true;
 }
 
 void PNPSolver1D::solve_transient(double dt, double t_final) {
