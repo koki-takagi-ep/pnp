@@ -41,7 +41,7 @@ ax1.set_xlim([0, 100])
 ax1.set_ylim([-60, 60])
 ax1.grid(True, alpha=0.3)
 ax1.annotate('Anode\n+50 mV', xy=(0, 50), xytext=(5, 40), fontsize=10, color='red')
-ax1.annotate('Cathode\n-50 mV', xy=(100, -50), xytext=(80, -40), fontsize=10, color='blue')
+ax1.annotate('Cathode\n0 mV', xy=(100, 0), xytext=(85, 10), fontsize=10, color='blue')
 
 # Top right: Full concentration profile
 ax2 = fig.add_subplot(2, 2, 2)
@@ -98,9 +98,9 @@ x_right_pm = (100 - x_nm[mask_right]) * 1000  # Distance from cathode in pm
 ax4.plot(x_right_pm[::-1], phi_mV[mask_right][::-1], 'k-', linewidth=2, label='φ [mV]')
 ax4.set_xlabel('Distance from cathode [pm]')
 ax4.set_ylabel('φ [mV]')
-ax4.set_title('(d) Right EDL (Cathode, φ = -50 mV)\nEMI$^+$ accumulation, BF$_4^-$ depletion')
+ax4.set_title('(d) Right EDL (Cathode, φ = 0 mV)\nBulk condition')
 ax4.set_xlim([0, 500])
-ax4.set_ylim([-55, 0])
+ax4.set_ylim([-5, 5])
 ax4.grid(True, alpha=0.3)
 
 # Add characteristic length markers
@@ -122,7 +122,7 @@ lines1, labels1 = ax4.get_legend_handles_labels()
 lines2, labels2 = ax4b.get_legend_handles_labels()
 ax4.legend(lines1 + lines2, labels1 + labels2, loc='right', fontsize=8)
 
-plt.suptitle('Figure 1: Dual-Electrode Model - EMI-BF$_4$ Ionic Liquid\n(φ$_L$ = +50 mV, φ$_R$ = -50 mV, c$_0$ = 1 M, λ$_D$ = 119 pm)',
+plt.suptitle('Figure 1: Dual-Electrode Model - EMI-BF$_4$ Ionic Liquid\n(φ$_L$ = +50 mV, φ$_R$ = 0 mV, c$_0$ = 1 M, λ$_D$ = 119 pm)',
              fontsize=14, y=0.98)
 plt.tight_layout()
 plt.savefig('results/dual_electrode.png', dpi=150, bbox_inches='tight')
@@ -259,11 +259,11 @@ fig, ax = plt.subplots(figsize=(14, 4))
 
 # Plot grid points as vertical lines
 for x in x_nm:
-    ax.axvline(x=x, color='blue', linewidth=0.5, alpha=0.5)
+    ax.axvline(x=x, color='black', linewidth=0.5, alpha=0.3)
 
 # Mark electrode positions
-ax.axvline(x=0, color='red', linewidth=3, label='Anode (+50 mV)')
-ax.axvline(x=100, color='blue', linewidth=3, label='Cathode (-50 mV)')
+ax.axvline(x=0, color='red', linewidth=5, label='Anode (+50 mV)')
+ax.axvline(x=100, color='blue', linewidth=5, label='Cathode (0 mV)')
 
 # Highlight EDL regions (5*lambda_D from each electrode)
 lambda_D_nm = 0.119
