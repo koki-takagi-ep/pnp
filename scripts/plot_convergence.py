@@ -47,31 +47,31 @@ print("=" * 60)
 # Create figure
 fig, ax = plt.subplots(figsize=(8, 6))
 
-# Plot L2 error vs N
-ax.loglog(N, L2_error, 'bo-', markersize=10, linewidth=2, label='Numerical L2 Error')
+# Plot L2 error vs dx (grid spacing)
+ax.loglog(dx, L2_error, 'bo-', markersize=10, linewidth=2, label='Numerical L2 Error')
 
 # Add reference slopes
-N_ref = np.array([40, 2000])
-# First order reference (slope = -1 on log-log)
-L2_1st = L2_error[0] * (N[0] / N_ref) ** 1
-ax.loglog(N_ref, L2_1st, 'k--', linewidth=1.5, alpha=0.6, label='1st order slope')
-# Second order reference (slope = -2 on log-log)
-L2_2nd = L2_error[0] * (N[0] / N_ref) ** 2
-ax.loglog(N_ref, L2_2nd, 'k:', linewidth=2, alpha=0.8, label='2nd order slope')
+dx_ref = np.array([0.05, 3.0])
+# First order reference (slope = 1 on log-log, error ~ dx^1)
+L2_1st = L2_error[0] * (dx_ref / dx[0]) ** 1
+ax.loglog(dx_ref, L2_1st, 'k--', linewidth=1.5, alpha=0.6, label='1st order slope')
+# Second order reference (slope = 2 on log-log, error ~ dx^2)
+L2_2nd = L2_error[0] * (dx_ref / dx[0]) ** 2
+ax.loglog(dx_ref, L2_2nd, 'k:', linewidth=2, alpha=0.8, label='2nd order slope')
 
-ax.set_xlabel('Number of Grid Points $N$', fontsize=12)
+ax.set_xlabel(r'$\Delta x$ [nm]', fontsize=12)
 ax.set_ylabel('L2 Error [mV]', fontsize=12)
 ax.set_title('Grid Convergence Analysis\n1D Poisson-Boltzmann Equation (2nd-order FDM)', fontsize=14)
-ax.legend(fontsize=10, loc='upper right')
+ax.legend(fontsize=10, loc='lower right')
 ax.grid(True, which='both', linestyle='-', alpha=0.3)
-ax.set_xlim([35, 2500])
+ax.set_xlim([0.04, 3.0])
 
 # Add text annotation for average order
 avg_order = np.mean(order[-3:])
-ax.text(0.05, 0.05, f'Observed order: {avg_order:.2f}\nTheoretical: 2.00',
+ax.text(0.05, 0.95, f'Observed order: {avg_order:.2f}\nTheoretical: 2.00',
         transform=ax.transAxes, fontsize=11,
         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
-        verticalalignment='bottom')
+        verticalalignment='top')
 
 plt.tight_layout()
 
