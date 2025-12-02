@@ -544,7 +544,7 @@ $$p = \frac{\log(L_2^{(1)} / L_2^{(2)})}{\log(N^{(2)} / N^{(1)})}$$
 
 <div align="center">
 
-![Dual Electrode](results/dual_electrode.png)
+![Dual Electrode](results/dual_electrode.png?v=2)
 
 *図1: EMI-BF₄イオン液体の両電極モデル（φ_L = +50 mV, φ_R = 0 mV）。(a) 電位プロファイル（全領域）、(b) イオン濃度分布（対数スケール）、(c) 左電極（アノード）近傍のEDL構造、(d) 右電極（カソード、バルク条件）。(c), (d)では左軸に電位、右軸に濃度（線形スケール）を表示。Debye長（λ_D = 119 pm）およびイオン直径（EMI⁺: 760 pm、BF₄⁻: 460 pm）をマーカーで表示。*
 
@@ -552,7 +552,7 @@ $$p = \frac{\log(L_2^{(1)} / L_2^{(2)})}{\log(N^{(2)} / N^{(1)})}$$
 
 <div align="center">
 
-![Grid Points](results/dual_electrode_grid_points.png)
+![Grid Points](results/dual_electrode_grid_points.png?v=2)
 
 *図2: 格子点位置の可視化。両電極近傍の EDL 領域（5λ_D）にそれぞれ 27 点を配置し、バルク領域は粗い格子で効率化。*
 
