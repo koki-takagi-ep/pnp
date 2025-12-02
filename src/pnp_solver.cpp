@@ -2523,6 +2523,7 @@ void PNPSolver1D::save_results(const std::string& filename) const {
     file << "# 8: c-/c0 [-]\n";
     file << "# 9: rho [C/m^3]\n";
     file << "# 10: phi_GC [mV] (Gouy-Chapman analytical)\n";
+    file << "# 11: dx [nm] (grid spacing)\n";
 
     file << std::scientific << std::setprecision(8);
 
@@ -2536,6 +2537,17 @@ void PNPSolver1D::save_results(const std::string& filename) const {
         double rho = e * NA * (params_.z_plus * c_plus_[i] + params_.z_minus * c_minus_[i]);
         double phi_gc_mV = phi_gc[i] * 1000.0;
 
+        // Calculate grid spacing dx
+        double dx_nm;
+        if (i == 0) {
+            dx_nm = (x_[1] - x_[0]) * 1e9;
+        } else if (i == params_.N - 1) {
+            dx_nm = (x_[i] - x_[i-1]) * 1e9;
+        } else {
+            // Average of left and right spacing
+            dx_nm = 0.5 * (x_[i+1] - x_[i-1]) * 1e9;
+        }
+
         file << x_nm << "\t"
              << x_norm << "\t"
              << phi_mV << "\t"
@@ -2545,7 +2557,8 @@ void PNPSolver1D::save_results(const std::string& filename) const {
              << c_plus_[i] / params_.c0 << "\t"
              << c_minus_[i] / params_.c0 << "\t"
              << rho << "\t"
-             << phi_gc_mV << "\n";
+             << phi_gc_mV << "\t"
+             << dx_nm << "\n";
     }
 
     file.close();

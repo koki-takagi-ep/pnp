@@ -18,8 +18,11 @@ c_plus = data[:, 4]        # c+ [mol/m^3]
 c_minus = data[:, 5]       # c- [mol/m^3]
 c_plus_ratio = data[:, 6]  # c+/c0
 c_minus_ratio = data[:, 7] # c-/c0
+dx_nm = data[:, 10]        # dx [nm] (grid spacing)
 
-# Create 2x2 figure with overview and zoomed views
+# ============================================================================
+# Figure 1: Capacitor Structure Overview (2x2 layout)
+# ============================================================================
 fig = plt.figure(figsize=(14, 10))
 
 # Top left: Full potential profile
@@ -28,7 +31,7 @@ ax1.plot(x_nm, phi_mV, 'b-', linewidth=2)
 ax1.axhline(y=0, color='gray', linestyle='--', linewidth=0.5)
 ax1.set_xlabel('x [nm]')
 ax1.set_ylabel('φ [mV]')
-ax1.set_title('Electric Potential Profile (Full Domain)')
+ax1.set_title('(a) Electric Potential Profile (Full Domain)')
 ax1.set_xlim([0, 100])
 ax1.set_ylim([-60, 60])
 ax1.grid(True, alpha=0.3)
@@ -42,7 +45,7 @@ ax2.semilogy(x_nm, c_minus_ratio, 'b-', linewidth=2, label='c$_-$/c$_0$ (anion)'
 ax2.axhline(y=1, color='gray', linestyle='--', linewidth=0.5, label='bulk')
 ax2.set_xlabel('x [nm]')
 ax2.set_ylabel('c/c$_0$ [-]')
-ax2.set_title('Ion Concentration Profiles (Full Domain)')
+ax2.set_title('(b) Ion Concentration Profiles (Full Domain)')
 ax2.set_xlim([0, 100])
 ax2.set_ylim([1e-1, 1e1])
 ax2.grid(True, alpha=0.3)
@@ -54,7 +57,7 @@ mask_left = x_nm <= 1.0
 ax3.plot(x_nm[mask_left] * 1000, phi_mV[mask_left], 'b-', linewidth=2)  # Convert to pm for visibility
 ax3.set_xlabel('x [pm]')
 ax3.set_ylabel('φ [mV]')
-ax3.set_title('Left EDL Structure (Anode, zoomed)')
+ax3.set_title('(c) Left EDL Structure (Anode, zoomed)')
 ax3.set_xlim([0, 1000])
 ax3.grid(True, alpha=0.3)
 
@@ -73,7 +76,7 @@ x_right_pm = (100 - x_nm[mask_right]) * 1000  # Distance from right electrode in
 ax4.plot(x_right_pm[::-1], phi_mV[mask_right][::-1], 'b-', linewidth=2)
 ax4.set_xlabel('Distance from cathode [pm]')
 ax4.set_ylabel('φ [mV]')
-ax4.set_title('Right EDL Structure (Cathode, zoomed)')
+ax4.set_title('(d) Right EDL Structure (Cathode, zoomed)')
 ax4.set_xlim([0, 1000])
 ax4.grid(True, alpha=0.3)
 
@@ -85,7 +88,7 @@ ax4b.set_ylabel('c/c$_0$ [-]', color='green')
 ax4b.set_ylim([1e-1, 1e1])
 ax4b.legend(loc='right')
 
-plt.suptitle('Dual-Electrode Model: Capacitor Structure\n(φ$_L$ = +50 mV, φ$_R$ = -50 mV, c$_0$ = 1 M, λ$_D$ = 0.12 nm)',
+plt.suptitle('Figure 1: Dual-Electrode Model - Capacitor Structure\n(φ$_L$ = +50 mV, φ$_R$ = -50 mV, c$_0$ = 1 M, λ$_D$ = 0.12 nm)',
              fontsize=14, y=0.98)
 plt.tight_layout()
 plt.savefig('results/dual_electrode.png', dpi=150, bbox_inches='tight')
@@ -93,7 +96,9 @@ plt.close()
 
 print("Saved: results/dual_electrode.png")
 
-# Create additional detailed EDL structure plot
+# ============================================================================
+# Figure 2: EDL Structure at Both Electrodes (Linear Scale)
+# ============================================================================
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
 # Left EDL with linear scale
@@ -106,7 +111,7 @@ ax1.plot(x_left_pm, c_minus_ratio[mask_left], 'b-', linewidth=2, marker='s', mar
 ax1.axhline(y=1, color='gray', linestyle='--', linewidth=0.5, label='bulk')
 ax1.set_xlabel('Distance from anode [pm]')
 ax1.set_ylabel('c/c$_0$ [-]')
-ax1.set_title('Left EDL (Anode, φ = +50 mV)\nAnion accumulation, Cation depletion')
+ax1.set_title('(a) Left EDL (Anode, φ = +50 mV)\nAnion accumulation, Cation depletion')
 ax1.set_xlim([0, 500])
 ax1.set_ylim([0, 8])
 ax1.grid(True, alpha=0.3)
@@ -128,7 +133,7 @@ ax2.plot(x_right_pm[::-1], c_minus_ratio[mask_right][::-1], 'b-', linewidth=2, m
 ax2.axhline(y=1, color='gray', linestyle='--', linewidth=0.5, label='bulk')
 ax2.set_xlabel('Distance from cathode [pm]')
 ax2.set_ylabel('c/c$_0$ [-]')
-ax2.set_title('Right EDL (Cathode, φ = -50 mV)\nCation accumulation, Anion depletion')
+ax2.set_title('(b) Right EDL (Cathode, φ = -50 mV)\nCation accumulation, Anion depletion')
 ax2.set_xlim([0, 500])
 ax2.set_ylim([0, 8])
 ax2.grid(True, alpha=0.3)
@@ -139,9 +144,122 @@ ax2.fill_between(x_right_pm[::-1], 0, c_plus_ratio[mask_right][::-1], alpha=0.2,
 ax2.axvline(x=lambda_D_pm, color='purple', linestyle=':', linewidth=2, label=f'λ$_D$ = {lambda_D_pm} pm')
 ax2.legend()
 
-plt.suptitle('EDL Structure at Both Electrodes (Linear Scale)', fontsize=14, y=1.02)
+plt.suptitle('Figure 2: EDL Structure at Both Electrodes (Linear Scale)', fontsize=14, y=1.02)
 plt.tight_layout()
 plt.savefig('results/dual_electrode_edl.png', dpi=150, bbox_inches='tight')
 plt.close()
 
 print("Saved: results/dual_electrode_edl.png")
+
+# ============================================================================
+# Figure 3: Grid Distribution (2x2 layout)
+# ============================================================================
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+# Top left: Grid spacing across full domain (log scale)
+ax1 = axes[0, 0]
+ax1.semilogy(x_nm, dx_nm * 1000, 'b-', linewidth=2, marker='o', markersize=2)
+ax1.set_xlabel('x [nm]')
+ax1.set_ylabel('Δx [pm]')
+ax1.set_title('(a) Grid Spacing Distribution (Full Domain)')
+ax1.set_xlim([0, 100])
+ax1.grid(True, alpha=0.3)
+ax1.axhline(y=119, color='purple', linestyle=':', linewidth=2, label=f'λ$_D$ = 119 pm')
+ax1.legend()
+
+# Top right: Grid point density (points per nm)
+ax2 = axes[0, 1]
+# Calculate point density as 1/dx
+point_density = 1.0 / dx_nm  # points per nm
+ax2.semilogy(x_nm, point_density, 'r-', linewidth=2)
+ax2.set_xlabel('x [nm]')
+ax2.set_ylabel('Grid point density [points/nm]')
+ax2.set_title('(b) Grid Point Density (Full Domain)')
+ax2.set_xlim([0, 100])
+ax2.grid(True, alpha=0.3)
+
+# Bottom left: Zoomed view near left electrode
+ax3 = axes[1, 0]
+mask_left = x_nm <= 1.0
+x_left_pm = x_nm[mask_left] * 1000
+dx_left_pm = dx_nm[mask_left] * 1000
+
+ax3.plot(x_left_pm, dx_left_pm, 'b-', linewidth=2, marker='o', markersize=4)
+ax3.set_xlabel('Distance from anode [pm]')
+ax3.set_ylabel('Δx [pm]')
+ax3.set_title('(c) Grid Spacing Near Left Electrode (Anode)')
+ax3.set_xlim([0, 1000])
+ax3.grid(True, alpha=0.3)
+ax3.axvline(x=119, color='purple', linestyle=':', linewidth=2, label=f'λ$_D$ = 119 pm')
+ax3.axhline(y=119, color='purple', linestyle=':', linewidth=2, alpha=0.5)
+ax3.legend()
+
+# Bottom right: Zoomed view near right electrode
+ax4 = axes[1, 1]
+mask_right = x_nm >= 99.0
+x_right_pm = (100 - x_nm[mask_right]) * 1000  # Distance from cathode
+dx_right_pm = dx_nm[mask_right] * 1000
+
+ax4.plot(x_right_pm[::-1], dx_right_pm[::-1], 'b-', linewidth=2, marker='o', markersize=4)
+ax4.set_xlabel('Distance from cathode [pm]')
+ax4.set_ylabel('Δx [pm]')
+ax4.set_title('(d) Grid Spacing Near Right Electrode (Cathode)')
+ax4.set_xlim([0, 1000])
+ax4.grid(True, alpha=0.3)
+ax4.axvline(x=119, color='purple', linestyle=':', linewidth=2, label=f'λ$_D$ = 119 pm')
+ax4.axhline(y=119, color='purple', linestyle=':', linewidth=2, alpha=0.5)
+ax4.legend()
+
+plt.suptitle('Figure 3: Grid Distribution for Dual-Electrode Model\n(Symmetric tanh-stretching, fine near both electrodes)',
+             fontsize=14, y=0.98)
+plt.tight_layout()
+plt.savefig('results/dual_electrode_grid.png', dpi=150, bbox_inches='tight')
+plt.close()
+
+print("Saved: results/dual_electrode_grid.png")
+
+# ============================================================================
+# Figure 4: Grid Point Position Visualization
+# ============================================================================
+fig, ax = plt.subplots(figsize=(14, 4))
+
+# Plot grid points as vertical lines
+for x in x_nm:
+    ax.axvline(x=x, color='blue', linewidth=0.5, alpha=0.5)
+
+# Mark electrode positions
+ax.axvline(x=0, color='red', linewidth=3, label='Anode (+50 mV)')
+ax.axvline(x=100, color='blue', linewidth=3, label='Cathode (-50 mV)')
+
+# Highlight EDL regions (5*lambda_D from each electrode)
+lambda_D_nm = 0.119
+edl_width = 5 * lambda_D_nm
+ax.axvspan(0, edl_width, alpha=0.2, color='red', label=f'EDL region (5λ$_D$ = {edl_width*1000:.0f} pm)')
+ax.axvspan(100 - edl_width, 100, alpha=0.2, color='blue')
+
+ax.set_xlabel('x [nm]')
+ax.set_ylabel('')
+ax.set_yticks([])
+ax.set_title(f'Figure 4: Grid Point Distribution (N = {len(x_nm)} points)')
+ax.set_xlim([-1, 101])
+ax.legend(loc='upper center', ncol=3)
+ax.grid(True, alpha=0.3, axis='x')
+
+plt.tight_layout()
+plt.savefig('results/dual_electrode_grid_points.png', dpi=150, bbox_inches='tight')
+plt.close()
+
+print("Saved: results/dual_electrode_grid_points.png")
+
+# Print grid statistics
+print("\n--- Grid Statistics ---")
+print(f"Total grid points: {len(x_nm)}")
+print(f"Min Δx: {dx_nm.min()*1000:.2f} pm (at electrodes)")
+print(f"Max Δx: {dx_nm.max()*1000:.2f} pm (at bulk center)")
+print(f"Δx ratio (max/min): {dx_nm.max()/dx_nm.min():.1f}")
+
+# Count points in EDL regions
+n_left_edl = np.sum(x_nm <= edl_width)
+n_right_edl = np.sum(x_nm >= 100 - edl_width)
+print(f"Points within 5λ_D of left electrode: {n_left_edl}")
+print(f"Points within 5λ_D of right electrode: {n_right_edl}")
