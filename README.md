@@ -283,36 +283,129 @@ Newton 法で現れる連立一次方程式 $J \cdot \delta\phi = -F$ は三重�
 
 ### 過渡解析ソルバー
 
-過渡解析では陰的スキームを使用：
+過渡解析では**陰的 Scharfetter-Gummel スキーム**と **Gummel 反復**を組み合わせた、ドリフト-拡散問題に対して安定かつ物理的に妥当な数値解法を用いる。
 
-**時間離散化**:
+#### Nernst-Planck 方程式の離散化
 
-$$\frac{c_i^{n+1} - c_i^n}{\Delta t} = D \frac{\partial}{\partial x} \left[ \frac{\partial c}{\partial x} + \frac{z e c}{k_B T} \frac{\partial \phi}{\partial x} \right]$$
+Nernst-Planck 方程式は以下のフラックス形式で表される：
 
-**Scharfetter-Gummel スキーム**:
+$$\frac{\partial c}{\partial t} = -\nabla \cdot \mathbf{J}, \quad \mathbf{J} = -D\left( \nabla c + \frac{ze}{k_B T} c \nabla \phi \right)$$
 
-ドリフト-拡散問題に対して数値的に安定な離散化を提供：
+これは次のように書き換えられる：
 
-$$J_{i+1/2} = \frac{D}{\Delta x} \left[ B(v \Delta x) c_{i+1} - B(-v \Delta x) c_i \right]$$
+$$\frac{\partial c}{\partial t} = \nabla \cdot \left[ D \left( \nabla c - v c \right) \right]$$
 
-ここで $B(x) = x/(\exp(x) - 1)$ は Bernoulli 関数、$v = zeE/(k_B T)$。
+ここで $v = -ze \nabla\phi / (k_B T)$ はドリフト速度を表す。
+
+#### Scharfetter-Gummel スキーム
+
+半導体デバイスシミュレーションで開発された **Scharfetter-Gummel (SG) スキーム**は、ドリフト-拡散方程式の数値解法として広く用いられている。このスキームは、セル界面 $i+1/2$ におけるフラックスを**指数フィッティング**により離散化する：
+
+$$J_{i+1/2} = \frac{D}{\Delta x_{i+1/2}} \left[ B(\eta_{i+1/2}) \, c_{i+1} - B(-\eta_{i+1/2}) \, c_i \right]$$
+
+ここで：
+- $\Delta x_{i+1/2} = x_{i+1} - x_i$
+- $\eta_{i+1/2} = -\dfrac{ze}{k_B T} (\phi_{i+1} - \phi_i)$（無次元電位差）
+- $B(\eta) = \dfrac{\eta}{e^\eta - 1}$ は **Bernoulli 関数**
 
 **Bernoulli 関数の性質**:
 
-- $B(0) = 1$
-- $B(x) + B(-x) = x$
-- $x \to 0$ で $B(x) \approx 1 - x/2 + x^2/12$
+| 性質 | 数式 | 用途 |
+|------|------|------|
+| 対称性 | $B(\eta) + B(-\eta) = \eta$ | フラックス保存の確認 |
+| 極限（$\eta \to 0$） | $B(\eta) \approx 1 - \dfrac{\eta}{2} + \dfrac{\eta^2}{12}$ | 拡散優位の場合 |
+| 極限（$\eta \to +\infty$） | $B(\eta) \to 0$ | 強いドリフトの場合 |
+| 極限（$\eta \to -\infty$） | $B(-\eta) \to |\eta|$ | 強い逆ドリフトの場合 |
 
-**各時間ステップのアルゴリズム**:
+**SG スキームの導出**:
 
-1. 準静的 Poisson 方程式を解いて $\phi$ を更新
-2. 陰的 Nernst-Planck で $c_+$ を更新（Scharfetter-Gummel）
-3. 陰的 Nernst-Planck で $c_-$ を更新（Scharfetter-Gummel）
-4. 定常状態判定（$\Delta c / c_0 < $ 許容誤差）
+セル $[x_i, x_{i+1}]$ 内で定常フラックス $J = -D(dc/dx - vc) = \text{const}$ を仮定すると、解析解は：
 
-**特性時間スケール**:
+$$c(x) = A e^{v(x - x_i)} + \frac{J}{Dv}$$
 
-$$\tau_D = \frac{\lambda_D^2}{D} \approx 0.1 - 1 \text{ ns}$$（典型的なイオン液体）
+境界条件 $c(x_i) = c_i$, $c(x_{i+1}) = c_{i+1}$ を適用して $J$ を求めると、SG フラックス公式が得られる。
+
+**数値的安定性**:
+
+SG スキームの特徴は、ドリフト優位（高 Péclet 数）でも拡散優位（低 Péclet 数）でも安定な離散化を提供することである：
+- 単純な中心差分は $|Pe| > 2$ で振動解を生じる
+- 風上差分は安定だが数値拡散が大きい
+- **SG スキームは両者の長所を兼ね備え、振動なく高精度**
+
+#### 陰的時間積分
+
+時間微分を後退 Euler 法で離散化：
+
+$$\frac{c_i^{n+1} - c_i^n}{\Delta t} = \frac{1}{\Delta x_i^{\text{avg}}} \left[ J_{i+1/2}^{n+1} - J_{i-1/2}^{n+1} \right]$$
+
+SG フラックスを代入すると、三重対角線形システムが得られる：
+
+$$a_i \, c_{i-1}^{n+1} + b_i \, c_i^{n+1} + d_i \, c_{i+1}^{n+1} = c_i^n$$
+
+係数は以下の通り：
+
+$$a_i = -\alpha_{i-1/2} \, B(\eta_{i-1/2})$$
+
+$$d_i = -\alpha_{i+1/2} \, B(\eta_{i+1/2})$$
+
+$$b_i = 1 + \alpha_{i-1/2} \, B(-\eta_{i-1/2}) + \alpha_{i+1/2} \, B(-\eta_{i+1/2})$$
+
+ここで $\alpha_{i\pm 1/2} = D \Delta t / (\Delta x_{i\pm 1/2} \cdot \Delta x_i^{\text{avg}})$。
+
+#### Gummel 反復法
+
+PNP 方程式系は Poisson 方程式と Nernst-Planck 方程式が強く結合している。これを効率的に解くため、**Gummel 反復**（デカップリング反復）を用いる：
+
+**アルゴリズム（各時間ステップ $n \to n+1$）**:
+
+```
+初期化: φ^(0) = φ^n, c_±^(0) = c_±^n
+for k = 0, 1, 2, ... until convergence:
+    1. Poisson 求解: ∇²φ^(k+1) = -ρ(c_±^(k))/ε
+    2. NP 求解 (c+): 陰的 SG スキームで c_+^(k+1) を計算（φ^(k+1) 使用）
+    3. NP 求解 (c-): 陰的 SG スキームで c_-^(k+1) を計算（φ^(k+1) 使用）
+    4. 収束判定: ||c^(k+1) - c^(k)||_∞ / c_0 < ε_tol
+更新: φ^(n+1) = φ^(k+1), c_±^(n+1) = c_±^(k+1)
+```
+
+**安定化技法**:
+- **緩和係数**: $c^{(k+1)} \leftarrow \omega \, c^{(k+1)}_{\text{new}} + (1-\omega) \, c^{(k)}$（$\omega = 0.5$ を使用）
+- **正値性保証**: $c \geq 10^{-12} c_0$ を強制
+
+#### 境界条件
+
+| 境界 | 電位 φ | 濃度 c |
+|------|--------|--------|
+| 左端 ($x = 0$) | Dirichlet: $\phi = \phi_0$ | ゼロフラックス: $J = 0$（阻止電極） |
+| 右端 ($x = L$) | Dirichlet: $\phi = 0$ | Dirichlet: $c = c_0$（バルク条件） |
+
+左境界でのゼロフラックス条件は、SG スキームでは：
+
+$$J_{1/2} = \frac{D}{\Delta x_0} \left[ B(\eta_0) \, c_1 - B(-\eta_0) \, c_0 \right] = 0$$
+
+これを離散化に組み込む。
+
+#### 特性時間スケール
+
+| 時間スケール | 定義 | 物理的意味 | 典型値（1 M イオン液体） |
+|-------------|------|-----------|------------------------|
+| Debye 時間 | $\tau_D = \lambda_D^2 / D$ | EDL 局所緩和 | ~140 ps |
+| RC 時定数 | $\tau_{RC} = \lambda_D \cdot L / D$ | 表面電荷充電 | ~120 ns |
+| 拡散時間 | $\tau_L = L^2 / D$ | バルク拡散 | ~100 µs |
+
+**CFL 条件**（高電場での安定性制約）:
+
+強電場領域（EDL 内部、$E \sim 1$ GV/m）ではドリフト速度が非常に大きくなるため、陰的スキームでも Gummel 反復の収束のために実効的な CFL 制約がある：
+
+$$\Delta t < \frac{\Delta x}{v_{\text{drift}}} = \frac{\Delta x \cdot k_B T}{D \cdot e \cdot |E|}$$
+
+100 mV ステップ応答では $\Delta t \approx 10$ ps が必要となる。
+
+#### 参考文献
+
+- Scharfetter, D. L. & Gummel, H. K. (1969). Large-signal analysis of a silicon Read diode oscillator. *IEEE Trans. Electron Devices*, 16(1), 64-77.
+- Selberherr, S. (1984). *Analysis and Simulation of Semiconductor Devices*. Springer.
+- Bank, R. E. et al. (1983). Numerical methods for semiconductor device simulation. *SIAM J. Sci. Stat. Comput.*, 4(3), 416-435.
 
 ## 検証結果
 
