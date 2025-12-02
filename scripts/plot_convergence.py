@@ -45,7 +45,7 @@ print(f"Theoretical order: 2.00 (2nd-order central difference)")
 print("=" * 60)
 
 # Create figure
-fig, ax = plt.subplots(figsize=(3, 3))
+fig, ax = plt.subplots(figsize=(6, 6))
 
 # Plot L2 error vs dx (grid spacing)
 ax.loglog(dx, L2_error, 'bo-', markersize=10, linewidth=2, label='Numerical L2 Error')
