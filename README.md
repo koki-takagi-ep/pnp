@@ -525,6 +525,43 @@ $$p = \frac{\log(L_2^{(1)} / L_2^{(2)})}{\log(N^{(2)} / N^{(1)})}$$
 | L∞ 誤差 | 0.050 mV |
 | 収束反復数 | 4 回 |
 
+### 両電極モデル（キャパシタ構造）
+
+本ソルバーは左右両端に異なる電位を印加する**両電極モデル**にも対応している。これはスーパーキャパシタや電気化学セルの解析に有用である。
+
+#### シミュレーション条件
+
+```bash
+./build/pnp_solver --phi0 50 --phi-right -50 --c0 1.0
+```
+
+- 左電極電位: $\phi_L = +50$ mV
+- 右電極電位: $\phi_R = -50$ mV
+- バルク濃度: $c_0 = 1.0$ mol/L
+- 計算領域: $L = 100$ nm
+
+#### 結果
+
+| 位置 | 電位 [mV] | c+ [mol/m³] | c+/c₀ | c- [mol/m³] | c-/c₀ |
+|:-----|----------:|------------:|------:|------------:|------:|
+| 左端 (x = 0) | +50.0 | 142.8 | 0.143 | 7001.2 | 7.00 |
+| 右端 (x = L) | −50.0 | 7001.2 | 7.00 | 142.8 | 0.143 |
+
+**物理的解釈**:
+
+- 正電位の左電極近傍: カチオンが排除され（c+/c₀ = 0.14）、アニオンが蓄積（c-/c₀ = 7.0）
+- 負電位の右電極近傍: アニオンが排除され（c-/c₀ = 0.14）、カチオンが蓄積（c+/c₀ = 7.0）
+- 対称的な境界条件（$|\phi_L| = |\phi_R|$）に対して完全に対称な解が得られる
+
+#### 境界条件オプション
+
+| モード | オプション | 濃度境界条件 | 用途 |
+|--------|-----------|-------------|------|
+| 開放系（デフォルト） | なし | 右端: $c = c_0$（Dirichlet） | 片側電極、半無限系 |
+| 閉鎖系 | `--closed-system` | 両端: $J = 0$（ゼロフラックス） | キャパシタ、閉じた電気化学セル |
+
+閉鎖系モードでは系内の総イオン数が保存される。これは実際のキャパシタセルをより正確にモデル化する。
+
 ## ビルドと実行
 
 ### 必要環境
@@ -553,15 +590,25 @@ make run
 # 一様グリッド
 ./build/pnp_solver --stretch 1.0 --output results/uniform.dat
 
-# 過渡解析
-./build/pnp_solver --transient --dt 0.1 --t-final 1.0 --output results/transient.dat
+# 両電極モデル（キャパシタ）
+./build/pnp_solver --phi0 50 --phi-right -50 --output results/capacitor.dat
+
+# 閉鎖系（両端ゼロフラックス）
+./build/pnp_solver --phi0 50 --phi-right -50 --closed-system --output results/closed.dat
+
+# 過渡解析（Gummel反復）
+./build/pnp_solver --gummel --dt 0.01 --t-final 0.2 --output results/transient.dat
+
+# 過渡解析（Shen-Xu正値性保存スキーム）
+./build/pnp_solver --shenxu --dt 0.01 --t-final 0.2 --output results/shenxu.dat
 ```
 
 ### コマンドラインオプション
 
 | オプション | 説明 | デフォルト値 |
 |-----------|------|-------------|
-| `--phi0 <value>` | 表面電位 [mV] | 100 |
+| `--phi0 <value>` | 左電極電位 [mV] | 100 |
+| `--phi-right <value>` | 右電極電位 [mV] | 0 |
 | `--c0 <value>` | バルク濃度 [mol/L] | 1.0 |
 | `--eps <value>` | 比誘電率 | 12 |
 | `--L <value>` | 計算領域長 [nm] | 100 |
@@ -569,9 +616,13 @@ make run
 | `--stretch <value>` | グリッドストレッチング係数 | 3.0 |
 | `--model <type>` | モデル種類（standard/bikerman） | standard |
 | `--ion-size <value>` | イオン直径 [nm]（Bikerman用） | 0.7 |
+| `--closed-system` | 両端ゼロフラックス境界条件 | -- |
 | `--transient` | 過渡解析モード | -- |
 | `--dt <value>` | 時間刻み [ns] | 0.1 |
 | `--t-final <value>` | 終了時間 [µs] | 1.0 |
+| `--gummel` | Gummel反復による過渡解析 | -- |
+| `--slotboom` | Slotboom変換による過渡解析 | -- |
+| `--shenxu` | Shen-Xu正値性保存スキーム | -- |
 | `--animation` | アニメーション用スナップショット保存 | -- |
 | `--snapshot-dir <dir>` | スナップショット出力先 | results/snapshots |
 | `--snapshot-interval <n>` | スナップショット間隔（ステップ数） | 10 |
