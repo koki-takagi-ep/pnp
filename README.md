@@ -552,25 +552,9 @@ $$p = \frac{\log(L_2^{(1)} / L_2^{(2)})}{\log(N^{(2)} / N^{(1)})}$$
 
 <div align="center">
 
-![Dual Electrode EDL](results/dual_electrode_edl.png)
-
-*図2: 両電極近傍のEDL構造（線形スケール）。左: アノード（+50 mV）近傍でのアニオン蓄積、右: カソード（-50 mV）近傍でのカチオン蓄積。紫の点線はDebye長（λ_D = 119 pm）を示す。*
-
-</div>
-
-<div align="center">
-
-![Grid Distribution](results/dual_electrode_grid.png)
-
-*図3: 格子分布の可視化。(a) 格子幅分布（全領域）、(b) 格子点密度、(c) 左電極近傍の格子幅、(d) 右電極近傍の格子幅。対称 tanh ストレッチングにより両電極近傍に格子点を集中配置。*
-
-</div>
-
-<div align="center">
-
 ![Grid Points](results/dual_electrode_grid_points.png)
 
-*図4: 格子点位置の可視化。両電極近傍の EDL 領域（5λ_D）にそれぞれ 27 点を配置し、バルク領域は粗い格子で効率化。*
+*図2: 格子点位置の可視化。両電極近傍の EDL 領域（5λ_D）にそれぞれ 27 点を配置し、バルク領域は粗い格子で効率化。*
 
 </div>
 
