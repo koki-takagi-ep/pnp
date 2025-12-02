@@ -1,333 +1,626 @@
-# 1D Poisson-Nernst-Planck Solver for Ionic Liquids
+# 1次元 Poisson-Nernst-Planck ソルバー
 
-A C++ implementation of the Poisson-Nernst-Planck (PNP) equations for simulating the electric double layer (EDL) in ionic liquids.
+イオン液体中の電気二重層（EDL: Electric Double Layer）をシミュレーションするための C++ 数値解析ライブラリ。
 
-## Features
+## 概要
 
-- Newton-Raphson solver for the nonlinear Poisson-Boltzmann equation
-- Non-uniform grid with clustering near the interface
-- Gouy-Chapman analytical solution for validation
-- **Bikerman model** for steric effects (ion size exclusion)
-- **Transient solver** using implicit Scharfetter-Gummel scheme
-- L2/L-infinity error analysis
-- Python visualization scripts
+本プロジェクトは、Poisson-Nernst-Planck (PNP) 方程式を用いて、帯電した界面近傍のイオン分布と電位分布を計算する1次元ソルバーを実装しています。
 
-## Theory
+### 主な機能
 
-### Governing Equations
+- **Newton-Raphson ソルバー**: 非線形 Poisson-Boltzmann 方程式の高速求解
+- **非一様グリッド**: 界面付近にグリッドを集中配置して解像度を向上
+- **Gouy-Chapman 解析解**: 検証用の理論解との比較
+- **Bikerman モデル**: 有限イオンサイズによる立体効果（steric effects）
+- **過渡解析ソルバー**: 陰的 Scharfetter-Gummel スキームによる時間発展計算
+- **誤差解析**: L2/L∞ ノルムによる精度評価
 
-The Poisson-Nernst-Planck equations describe ion transport in electrolytes:
+## 支配方程式
 
-**Poisson Equation** (electrostatic potential):
-```
-∇²φ = -ρ/ε = -(e/ε)(z₊c₊ + z₋c₋)
-```
+### Poisson-Nernst-Planck 方程式
 
-**Nernst-Planck Equation** (ion flux):
-```
-J_i = -D_i(∇c_i + (z_i e c_i)/(k_B T) ∇φ)
-```
+電解質中のイオン輸送は以下の連立方程式で記述される：
 
-**Continuity Equation**:
-```
-∂c_i/∂t = -∇·J_i
-```
+**Poisson 方程式**（静電ポテンシャル）:
 
-### 1D Formulation
+$$\nabla^2 \phi = -\frac{\rho}{\varepsilon} = -\frac{e}{\varepsilon}(z_+ c_+ + z_- c_-)$$
 
-For a 1D domain (x-direction only):
+ここで：
+- $\phi$ : 電位 [V]
+- $\rho$ : 電荷密度 [C/m³]
+- $\varepsilon = \varepsilon_r \varepsilon_0$ : 誘電率 [F/m]
+- $e = 1.602 \times 10^{-19}$ C : 素電荷
+- $z_\pm$ : イオン価数
+- $c_\pm$ : イオン濃度 [mol/m³]
 
-```
-d²φ/dx² = -(e/ε)(z₊c₊ + z₋c₋)
+**Nernst-Planck 方程式**（イオンフラックス）:
 
-∂c_±/∂t = D_± ∂/∂x (∂c_±/∂x ± (e c_±)/(k_B T) ∂φ/∂x)
-```
+$$\mathbf{J}_i = -D_i \left( \nabla c_i + \frac{z_i e c_i}{k_B T} \nabla \phi \right)$$
 
-### Steady-State Solution
+ここで：
+- $\mathbf{J}_i$ : イオン種 $i$ のフラックス [mol/(m²·s)]
+- $D_i$ : 拡散係数 [m²/s]
+- $k_B = 1.381 \times 10^{-23}$ J/K : Boltzmann 定数
+- $T$ : 温度 [K]
 
-At equilibrium with zero flux (J = 0), the ion concentrations follow Boltzmann distribution:
+**連続の式**:
 
-```
-c_± = c₀ exp(∓eφ/(k_B T))
-```
+$$\frac{\partial c_i}{\partial t} = -\nabla \cdot \mathbf{J}_i$$
 
-Substituting into Poisson's equation yields the **Poisson-Boltzmann equation**:
+### 1次元定式化
 
-```
-d²φ/dx² = (2 e N_A c₀/ε) sinh(eφ/(k_B T))
-```
+$x$ 方向のみを考慮した1次元系では：
 
-### Non-Dimensionalization
+$$\frac{d^2 \phi}{d x^2} = -\frac{e}{\varepsilon}(z_+ c_+ + z_- c_-)$$
 
-**Characteristic scales**:
-- Length: Debye length λ_D = √(ε k_B T / (2 e² c₀ N_A))
-- Potential: Thermal voltage φ_T = k_B T / e ≈ 25.7 mV at 298 K
-- Concentration: Bulk concentration c₀
+$$\frac{\partial c_\pm}{\partial t} = D_\pm \frac{\partial}{\partial x} \left( \frac{\partial c_\pm}{\partial x} \pm \frac{e c_\pm}{k_B T} \frac{\partial \phi}{\partial x} \right)$$
 
-**Non-dimensional variables**:
-- ξ = x / λ_D
-- ψ = φ / φ_T = eφ / (k_B T)
+### 定常状態解（Boltzmann 分布）
 
-**Non-dimensional Poisson-Boltzmann equation**:
-```
-d²ψ/dξ² = sinh(ψ)
-```
+定常状態かつフラックスゼロ（$\mathbf{J} = 0$）の条件下では、イオン濃度は Boltzmann 分布に従う：
 
-### Gouy-Chapman Analytical Solution
+$$c_\pm = c_0 \exp\left( \mp \frac{e \phi}{k_B T} \right)$$
 
-For a 1:1 electrolyte with surface potential ψ₀, the analytical solution is:
+これを Poisson 方程式に代入すると **Poisson-Boltzmann 方程式** が得られる：
 
-```
-tanh(ψ/4) = tanh(ψ₀/4) exp(-ξ)
-```
+$$\frac{d^2 \phi}{d x^2} = \frac{2 e N_A c_0}{\varepsilon} \sinh\left( \frac{e \phi}{k_B T} \right)$$
 
-Or equivalently:
-```
-φ(x) = (4 k_B T / e) arctanh[tanh(eφ₀/(4k_B T)) exp(-x/λ_D)]
-```
+### 無次元化
 
-### Bikerman Model (Modified Poisson-Boltzmann)
+**特性スケール**:
 
-The standard Poisson-Boltzmann equation predicts unphysically high concentrations near charged surfaces. The Bikerman model introduces steric effects by accounting for finite ion size.
+| 量 | 定義 | 物理的意味 |
+|---|---|---|
+| Debye 長 | $\lambda_D = \sqrt{\dfrac{\varepsilon k_B T}{2 e^2 c_0 N_A}}$ | 遮蔽長さ |
+| 熱電圧 | $\phi_T = \dfrac{k_B T}{e} \approx 25.7$ mV (298 K) | 熱エネルギー |
+| バルク濃度 | $c_0$ | 基準濃度 |
 
-**Modified Boltzmann Distribution**:
-```
-c_± = c₀ exp(∓ψ) / g(ψ)
-```
+**無次元変数**:
 
-where the crowding function is:
-```
-g(ψ) = 1 - ν + ν cosh(ψ)
-```
+$$\xi = \frac{x}{\lambda_D}, \quad \psi = \frac{\phi}{\phi_T} = \frac{e \phi}{k_B T}$$
 
-**Packing Fraction**:
-```
-ν = 2 a³ c₀ N_A
-```
+**無次元 Poisson-Boltzmann 方程式**:
 
-where `a` is the ion diameter (typically 0.5-1.0 nm for ionic liquids).
+$$\frac{d^2 \psi}{d \xi^2} = \sinh(\psi)$$
 
-**Modified Poisson-Boltzmann Equation**:
-```
-d²ψ/dξ² = sinh(ψ) / g(ψ)
-```
+### Gouy-Chapman 解析解
 
-**Physical Interpretation**:
-- At low potentials (|ψ| << 1): g(ψ) ≈ 1, reduces to standard PB
-- At high potentials: g(ψ) limits the maximum concentration to ~1/ν × c₀
-- Prevents unphysical crowding where c > 1/(a³ N_A)
+1:1 電解質において、表面電位 $\psi_0$ が与えられたときの解析解：
 
-**Reference**: Kilic, Bazant & Ajdari, *Phys. Rev. E* 75, 021502 (2007)
+$$\tanh\left( \frac{\psi}{4} \right) = \tanh\left( \frac{\psi_0}{4} \right) \exp(-\xi)$$
 
-## Numerical Method
+次元量に戻すと：
 
-### Discretization
+$$\phi(x) = \frac{4 k_B T}{e} \tanh^{-1} \left[ \tanh\left( \frac{e \phi_0}{4 k_B T} \right) \exp\left( -\frac{x}{\lambda_D} \right) \right]$$
 
-**Non-uniform Grid**:
+**導出**:
 
-The grid is stretched to cluster points near the interface (x = 0):
-```
-x_i = L × [1 - (1 - ξ_i)^β]
-```
-where ξ_i = i/(N-1) ∈ [0,1] and β > 1 is the stretching factor.
+Poisson-Boltzmann 方程式を一度積分すると：
 
-**Second Derivative (Non-uniform Grid)**:
+$$\left( \frac{d\psi}{d\xi} \right)^2 = 2(\cosh\psi - 1) = 4\sinh^2\left( \frac{\psi}{2} \right)$$
 
-For interior points:
-```
-d²φ/dx² ≈ [φ_{i+1} - φ_i)/Δx⁺ - (φ_i - φ_{i-1})/Δx⁻] / Δx_avg
-```
-where:
-- Δx⁺ = x_{i+1} - x_i
-- Δx⁻ = x_i - x_{i-1}
-- Δx_avg = (Δx⁺ + Δx⁻) / 2
+したがって：
 
-### Newton-Raphson Method
+$$\frac{d\psi}{d\xi} = -2\sinh\left( \frac{\psi}{2} \right)$$
 
-The nonlinear Poisson-Boltzmann equation is solved using Newton-Raphson iteration:
+（負号は電位が界面から離れるにつれ減少することを反映）
 
-**Residual**:
-```
-F(φ) = d²φ/dx² - κ² φ_T sinh(φ/φ_T) = 0
-```
+変数分離して積分：
+
+$$\int_{\psi_0}^{\psi} \frac{d\psi'}{2\sinh(\psi'/2)} = -\int_0^{\xi} d\xi'$$
+
+$$\ln\left| \tanh\left( \frac{\psi}{4} \right) \right| - \ln\left| \tanh\left( \frac{\psi_0}{4} \right) \right| = -\xi$$
+
+これより Gouy-Chapman 解が得られる。
+
+### Bikerman モデル（修正 Poisson-Boltzmann）
+
+標準 Poisson-Boltzmann 方程式は、高電位領域でイオン濃度が非物理的に高くなる問題がある。Bikerman モデルは有限イオンサイズを考慮することでこの問題を解決する。
+
+**修正 Boltzmann 分布**:
+
+$$c_\pm = \frac{c_0 \exp(\mp \psi)}{g(\psi)}$$
+
+**混雑関数（crowding function）**:
+
+$$g(\psi) = 1 - \nu + \nu \cosh(\psi)$$
+
+**充填率（packing fraction）**:
+
+$$\nu = 2 a^3 c_0 N_A$$
+
+ここで $a$ はイオン直径（イオン液体では典型的に 0.5〜1.0 nm）。
+
+**修正 Poisson-Boltzmann 方程式**:
+
+$$\frac{d^2 \psi}{d \xi^2} = \frac{\sinh(\psi)}{g(\psi)}$$
+
+**物理的解釈**:
+
+- 低電位（$|\psi| \ll 1$）: $g(\psi) \approx 1$ となり標準 PB に帰着
+- 高電位: $g(\psi)$ により最大濃度が $\sim c_0/\nu$ に制限
+- 非物理的な濃度 $c > 1/(a^3 N_A)$ を防止
+
+**参考文献**: Kilic, Bazant & Ajdari, *Phys. Rev. E* 75, 021502 (2007)
+
+## モデルの仮定と適用範囲
+
+本ソルバーは以下の仮定に基づいている。これらの仮定の妥当性を理解した上で使用することが重要である。
+
+### 物理的仮定
+
+| 仮定 | 説明 | 影響・制限 |
+|------|------|-----------|
+| **1. 連続体仮定** | イオンおよび溶媒を連続体として扱う | Debye長が分子サイズ（〜0.5 nm）より十分大きい系に適用可能。極めて高濃度の電解質（> 5 M）では分子論的効果が顕著になる |
+| **2. 平均場近似** | イオン間の相互作用を平均電場を通じてのみ考慮 | イオン間の直接的な相関（静電相関、硬球排除）を無視。高価数イオンや高濃度系では誤差が大きくなる |
+| **3. 希薄溶液仮定**（標準PB） | イオンを点電荷として扱う | 高電位領域で非物理的な高濃度を予測。Bikermanモデルで部分的に改善 |
+| **4. 誘電率一定** | 電解質全体で誘電率が均一かつ一定 | 電気二重層内での誘電飽和（高電場による誘電率低下）を無視 |
+| **5. 温度一定** | 等温条件 | Joule加熱や温度勾配を無視。急速な充放電過程では不正確になる可能性 |
+| **6. 1:1対称電解質** | カチオンとアニオンが同じ価数（±1）と拡散係数を持つ | 非対称電解質（異なる価数、サイズ、拡散係数）には直接適用不可 |
+| **7. 準静的電場** | 過渡解析でもPoisson方程式は各時刻で定常状態 | 電荷緩和が電場の変化より十分速い場合に妥当（RC時定数 << 拡散時定数） |
+
+### 境界条件の仮定
+
+| 境界 | 条件 | 物理的意味 |
+|------|------|-----------|
+| **左端（x = 0）** | Dirichlet（電位固定）、ゼロフラックス（濃度） | 理想的な阻止電極、イオンは電極に吸着・脱着しない |
+| **右端（x = L）** | Dirichlet（φ = 0, c = c₀） | 十分遠方でバルク条件が成立、L >> λ_D が必要 |
+
+### 数値的仮定
+
+| 仮定 | 説明 |
+|------|------|
+| **1次元系** | 電極は無限平面、界面に垂直な方向のみ変化 |
+| **単一界面** | 一方の電極のみを考慮、対向電極からの影響なし |
+
+### 各モデルの適用範囲
+
+**標準 Poisson-Boltzmann**:
+- 低〜中程度の電位（$|\phi| \lesssim 100$ mV）
+- 低〜中程度の濃度（$c_0 \lesssim 0.1$ M）
+- Gouy-Chapman理論と同等
+
+**Bikerman モデル**:
+- より高電位の系に適用可能
+- 有限イオンサイズ効果を考慮
+- ただし、静電相関は考慮されていない
+
+### 本モデルでは考慮されていない効果
+
+1. **静電相関**: 高価数イオンや高濃度系で重要
+2. **誘電飽和**: 高電場での誘電率低下
+3. **比吸着**: イオンの電極表面への特異吸着
+4. **溶媒構造**: 溶媒分子の配向や構造化
+5. **画像電荷効果**: 電極界面でのイオンの鏡像電荷
+6. **非電気化学的相互作用**: van der Waals力など
+
+### 妥当性の目安
+
+| パラメータ | 推奨範囲 | 備考 |
+|-----------|---------|------|
+| 濃度 $c_0$ | 0.001〜1 M | 高濃度では平均場近似が破綻 |
+| 表面電位 $\phi_0$ | $\lesssim 4\phi_T \approx 100$ mV | 高電位ではBikermanモデル推奨 |
+| イオン価数 | ±1 | 多価イオンでは静電相関が重要 |
+| 計算領域 $L$ | $\geq 10 \lambda_D$ | バルク条件の成立に必要 |
+
+## 数値解法
+
+### 離散化手法
+
+本ソルバーでは、**2次精度中心差分法**（2nd-order central finite difference method）を用いて空間離散化を行う。
+
+#### 解く方程式
+
+定常状態の Poisson-Boltzmann 方程式を離散化する：
+
+$$\frac{d^2 \phi}{dx^2} = \kappa^2 \phi_T \sinh\left(\frac{\phi}{\phi_T}\right)$$
+
+ここで $\kappa = 1/\lambda_D$ は逆 Debye 長、$\phi_T = k_B T/e$ は熱電圧。
+
+#### 空間離散化
+
+**非一様グリッド**:
+
+界面付近（$x = 0$）にグリッド点を集中配置：
+
+$$x_i = L \left[ 1 - (1 - \xi_i)^\beta \right]$$
+
+ここで $\xi_i = i/(N-1) \in [0, 1]$、$\beta > 1$ はストレッチング係数。$\beta = 1$ で一様グリッドとなる。
+
+**2階微分の離散化（2次精度）**:
+
+非一様グリッド上での2階微分は、Taylor展開に基づく以下の式で離散化される：
+
+$$\frac{d^2 \phi}{d x^2} \bigg|_i = \frac{2}{\Delta x^- + \Delta x^+} \left[ \frac{\phi_{i+1} - \phi_i}{\Delta x^+} - \frac{\phi_i - \phi_{i-1}}{\Delta x^-} \right] + O(h^2)$$
+
+ここで：
+- $\Delta x^+ = x_{i+1} - x_i$（前方グリッド幅）
+- $\Delta x^- = x_i - x_{i-1}$（後方グリッド幅）
+
+**2次精度の証明**:
+
+Taylor展開により：
+$$\phi_{i+1} = \phi_i + \Delta x^+ \phi'_i + \frac{(\Delta x^+)^2}{2}\phi''_i + \frac{(\Delta x^+)^3}{6}\phi'''_i + O(h^4)$$
+$$\phi_{i-1} = \phi_i - \Delta x^- \phi'_i + \frac{(\Delta x^-)^2}{2}\phi''_i - \frac{(\Delta x^-)^3}{6}\phi'''_i + O(h^4)$$
+
+これらを組み合わせると、上記の離散化公式の打ち切り誤差が $O(h^2)$ となることが示される。
+
+**離散化された方程式系**:
+
+内点（$i = 1, 2, \ldots, N-2$）において：
+
+$$\frac{2}{\Delta x^- + \Delta x^+} \left[ \frac{\phi_{i+1} - \phi_i}{\Delta x^+} - \frac{\phi_i - \phi_{i-1}}{\Delta x^-} \right] = \kappa^2 \phi_T \sinh\left(\frac{\phi_i}{\phi_T}\right)$$
+
+境界条件（Dirichlet）：
+- $\phi_0 = \phi_{\text{surface}}$（表面電位）
+- $\phi_{N-1} = 0$（バルク、電気的中性）
+
+### Newton-Raphson 法
+
+非線形 Poisson-Boltzmann 方程式を Newton-Raphson 反復で解く。
+
+**残差**:
+
+$$F(\phi) = \frac{d^2 \phi}{d x^2} - \kappa^2 \phi_T \sinh\left( \frac{\phi}{\phi_T} \right) = 0$$
+
+ここで $\kappa = 1/\lambda_D$。
 
 **Jacobian**:
+
+$$J = \frac{dF}{d\phi} = \frac{d^2}{d x^2} - \kappa^2 \cosh\left( \frac{\phi}{\phi_T} \right)$$
+
+**Newton 更新**:
+
+$$J \cdot \delta\phi = -F$$
+
+$$\phi^{n+1} = \phi^n + \alpha \cdot \delta\phi$$
+
+ここで $\alpha \in (0, 1]$ は安定性のための適応的ダンピング係数。
+
+**三重対角行列の解法（Thomas アルゴリズム）**:
+
+Newton 法で現れる連立一次方程式 $J \cdot \delta\phi = -F$ は三重対角形式であり、$O(N)$ の計算量で効率的に解ける。
+
+### 過渡解析ソルバー
+
+過渡解析では**陰的 Scharfetter-Gummel スキーム**と **Gummel 反復**を組み合わせた、ドリフト-拡散問題に対して安定かつ物理的に妥当な数値解法を用いる。
+
+#### Nernst-Planck 方程式の離散化
+
+Nernst-Planck 方程式は以下のフラックス形式で表される：
+
+$$\frac{\partial c}{\partial t} = -\nabla \cdot \mathbf{J}, \quad \mathbf{J} = -D\left( \nabla c + \frac{ze}{k_B T} c \nabla \phi \right)$$
+
+これは次のように書き換えられる：
+
+$$\frac{\partial c}{\partial t} = \nabla \cdot \left[ D \left( \nabla c - v c \right) \right]$$
+
+ここで $v = -ze \nabla\phi / (k_B T)$ はドリフト速度を表す。
+
+#### Scharfetter-Gummel スキーム
+
+半導体デバイスシミュレーションで開発された **Scharfetter-Gummel (SG) スキーム**は、ドリフト-拡散方程式の数値解法として広く用いられている。このスキームは、セル界面 $i+1/2$ におけるフラックスを**指数フィッティング**により離散化する：
+
+$$J_{i+1/2} = \frac{D}{\Delta x_{i+1/2}} \left[ B(\eta_{i+1/2}) \, c_{i+1} - B(-\eta_{i+1/2}) \, c_i \right]$$
+
+ここで：
+- $\Delta x_{i+1/2} = x_{i+1} - x_i$
+- $\eta_{i+1/2} = -\dfrac{ze}{k_B T} (\phi_{i+1} - \phi_i)$（無次元電位差）
+- $B(\eta) = \dfrac{\eta}{e^\eta - 1}$ は **Bernoulli 関数**
+
+**Bernoulli 関数の性質**:
+
+| 性質 | 数式 | 用途 |
+|------|------|------|
+| 対称性 | $B(\eta) + B(-\eta) = \eta$ | フラックス保存の確認 |
+| 極限（$\eta \to 0$） | $B(\eta) \approx 1 - \dfrac{\eta}{2} + \dfrac{\eta^2}{12}$ | 拡散優位の場合 |
+| 極限（$\eta \to +\infty$） | $B(\eta) \to 0$ | 強いドリフトの場合 |
+| 極限（$\eta \to -\infty$） | $B(-\eta) \to |\eta|$ | 強い逆ドリフトの場合 |
+
+**SG スキームの導出**:
+
+セル $[x_i, x_{i+1}]$ 内で定常フラックス $J = -D(dc/dx - vc) = \text{const}$ を仮定すると、解析解は：
+
+$$c(x) = A e^{v(x - x_i)} + \frac{J}{Dv}$$
+
+境界条件 $c(x_i) = c_i$, $c(x_{i+1}) = c_{i+1}$ を適用して $J$ を求めると、SG フラックス公式が得られる。
+
+**数値的安定性**:
+
+SG スキームの特徴は、ドリフト優位（高 Péclet 数）でも拡散優位（低 Péclet 数）でも安定な離散化を提供することである：
+- 単純な中心差分は $|Pe| > 2$ で振動解を生じる
+- 風上差分は安定だが数値拡散が大きい
+- **SG スキームは両者の長所を兼ね備え、振動なく高精度**
+
+#### 陰的時間積分
+
+時間微分を後退 Euler 法で離散化：
+
+$$\frac{c_i^{n+1} - c_i^n}{\Delta t} = \frac{1}{\Delta x_i^{\text{avg}}} \left[ J_{i+1/2}^{n+1} - J_{i-1/2}^{n+1} \right]$$
+
+SG フラックスを代入すると、三重対角線形システムが得られる：
+
+$$a_i \, c_{i-1}^{n+1} + b_i \, c_i^{n+1} + d_i \, c_{i+1}^{n+1} = c_i^n$$
+
+係数は以下の通り：
+
+$$a_i = -\alpha_{i-1/2} \, B(\eta_{i-1/2})$$
+
+$$d_i = -\alpha_{i+1/2} \, B(\eta_{i+1/2})$$
+
+$$b_i = 1 + \alpha_{i-1/2} \, B(-\eta_{i-1/2}) + \alpha_{i+1/2} \, B(-\eta_{i+1/2})$$
+
+ここで $\alpha_{i\pm 1/2} = D \Delta t / (\Delta x_{i\pm 1/2} \cdot \Delta x_i^{\text{avg}})$。
+
+#### Gummel 反復法
+
+PNP 方程式系は Poisson 方程式と Nernst-Planck 方程式が強く結合している。これを効率的に解くため、**Gummel 反復**（デカップリング反復）を用いる：
+
+**アルゴリズム（各時間ステップ $n \to n+1$）**:
+
 ```
-J = dF/dφ = d²/dx² - κ² cosh(φ/φ_T)
+初期化: φ^(0) = φ^n, c_±^(0) = c_±^n
+for k = 0, 1, 2, ... until convergence:
+    1. Poisson 求解: ∇²φ^(k+1) = -ρ(c_±^(k))/ε
+    2. NP 求解 (c+): 陰的 SG スキームで c_+^(k+1) を計算（φ^(k+1) 使用）
+    3. NP 求解 (c-): 陰的 SG スキームで c_-^(k+1) を計算（φ^(k+1) 使用）
+    4. 収束判定: ||c^(k+1) - c^(k)||_∞ / c_0 < ε_tol
+更新: φ^(n+1) = φ^(k+1), c_±^(n+1) = c_±^(k+1)
 ```
 
-**Newton Update**:
-```
-J · δφ = -F
-φ^{n+1} = φ^n + α · δφ
-```
-where α ∈ (0, 1] is an adaptive damping factor for stability.
+**安定化技法**:
+- **緩和係数**: $c^{(k+1)} \leftarrow \omega \, c^{(k+1)}_{\text{new}} + (1-\omega) \, c^{(k)}$（$\omega = 0.5$ を使用）
+- **正値性保証**: $c \geq 10^{-12} c_0$ を強制
 
-### Algorithm (Steady-State)
+#### 境界条件
 
-1. Initialize with Gouy-Chapman analytical solution
-2. Build Jacobian matrix and residual vector
-3. Solve tridiagonal system using Thomas algorithm
-4. Update solution with adaptive damping
-5. Check convergence (relative change < tolerance)
-6. Repeat until converged
+| 境界 | 電位 φ | 濃度 c |
+|------|--------|--------|
+| 左端 ($x = 0$) | Dirichlet: $\phi = \phi_0$ | ゼロフラックス: $J = 0$（阻止電極） |
+| 右端 ($x = L$) | Dirichlet: $\phi = 0$ | Dirichlet: $c = c_0$（バルク条件） |
 
-### Transient Solver
+左境界でのゼロフラックス条件は、SG スキームでは：
 
-The transient solver uses an implicit scheme for stability:
+$$J_{1/2} = \frac{D}{\Delta x_0} \left[ B(\eta_0) \, c_1 - B(-\eta_0) \, c_0 \right] = 0$$
 
-**Time Discretization**:
-```
-(c_i^{n+1} - c_i^n) / Δt = D ∂/∂x [∂c/∂x + z e c/(kT) ∂φ/∂x]
-```
+これを離散化に組み込む。
 
-**Scharfetter-Gummel Scheme**:
+#### 特性時間スケール
 
-For drift-diffusion problems, the Scharfetter-Gummel scheme provides stable discretization:
-```
-J_{i+1/2} = D/Δx [B(v Δx) c_{i+1} - B(-v Δx) c_i]
-```
+| 時間スケール | 定義 | 物理的意味 | 典型値（1 M イオン液体） |
+|-------------|------|-----------|------------------------|
+| Debye 時間 | $\tau_D = \lambda_D^2 / D$ | EDL 局所緩和 | ~140 ps |
+| RC 時定数 | $\tau_{RC} = \lambda_D \cdot L / D$ | 表面電荷充電 | ~120 ns |
+| 拡散時間 | $\tau_L = L^2 / D$ | バルク拡散 | ~100 µs |
 
-where `B(x) = x/(exp(x)-1)` is the Bernoulli function and `v = zeE/(kT)`.
+**CFL 条件**（高電場での安定性制約）:
 
-**Algorithm at Each Time Step**:
-1. Solve quasi-static Poisson equation for φ
-2. Update c₊ using implicit Nernst-Planck with Scharfetter-Gummel
-3. Update c₋ using implicit Nernst-Planck with Scharfetter-Gummel
-4. Check for steady state (Δc/c₀ < tolerance)
+強電場領域（EDL 内部、$E \sim 1$ GV/m）ではドリフト速度が非常に大きくなるため、陰的スキームでも Gummel 反復の収束のために実効的な CFL 制約がある：
 
-**Characteristic Time Scale**:
-```
-τ_D = λ_D² / D ≈ 0.1-1 ns (for typical ionic liquids)
-```
+$$\Delta t < \frac{\Delta x}{v_{\text{drift}}} = \frac{\Delta x \cdot k_B T}{D \cdot e \cdot |E|}$$
 
-## Building and Running
+100 mV ステップ応答では $\Delta t \approx 10$ ps が必要となる。
 
-### Requirements
+#### 参考文献
 
-- C++17 compatible compiler (g++ recommended)
-- Python 3 with NumPy and Matplotlib (for visualization)
+- Scharfetter, D. L. & Gummel, H. K. (1969). Large-signal analysis of a silicon Read diode oscillator. *IEEE Trans. Electron Devices*, 16(1), 64-77.
+- Selberherr, S. (1984). *Analysis and Simulation of Semiconductor Devices*. Springer.
+- Bank, R. E. et al. (1983). Numerical methods for semiconductor device simulation. *SIAM J. Sci. Stat. Comput.*, 4(3), 416-435.
 
-### Build
+## 検証結果
+
+### 格子収束性解析
+
+数値解の精度を検証するため、Gouy-Chapman 解析解との比較による格子収束性解析を実施した。
+
+#### 誤差評価指標
+
+**L2 誤差ノルム**（二乗平均平方根誤差）:
+
+$$L_2 = \sqrt{\frac{1}{N} \sum_{i=1}^{N} (\phi_i^{\text{num}} - \phi_i^{\text{exact}})^2}$$
+
+**収束次数** $p$ の算出:
+
+$$p = \frac{\log(L_2^{(1)} / L_2^{(2)})}{\log(N^{(2)} / N^{(1)})}$$
+
+ここで上付き添字 $(1), (2)$ は粗いグリッドと細かいグリッドをそれぞれ示す。
+
+#### 収束性テスト条件
+
+- バルク濃度: $c_0 = 0.001$ mol/L（Debye 長 ≈ 11.9 nm）
+- 表面電位: $\phi_0 = 50$ mV
+- 計算領域: $L = 100$ nm
+- グリッド: 一様グリッド（`--stretch 1.0`）
+
+#### 結果
+
+<div align="center">
+
+![Grid Convergence](results/grid_convergence.png)
+
+*図: 格子収束性解析。横軸はグリッド幅 Δx [nm]、縦軸は L2 誤差 [mV]。破線は1次精度、点線は2次精度の参照勾配を示す。*
+
+</div>
+
+| グリッド点数 N | グリッド幅 Δx [nm] | L2 誤差 [mV] | 収束次数 p |
+|:--------------:|:------------------:|:------------:|:----------:|
+| 51 | 2.0000 | 1.064e-01 | — |
+| 101 | 1.0000 | 2.994e-02 | 1.86 |
+| 201 | 0.5000 | 7.758e-03 | 1.96 |
+| 401 | 0.2500 | 1.959e-03 | 1.99 |
+| 801 | 0.1250 | 4.911e-04 | 2.00 |
+| 1601 | 0.0625 | 1.229e-04 | 2.00 |
+
+**収束次数（最後の3点平均）: 2.00**（理論値と完全に一致）
+
+#### 考察
+
+- グリッドを2倍に細かくすると、誤差は約4分の1に減少（2次精度の特徴）
+- $N \geq 201$ で理論的な2次精度（$p \approx 2$）を達成
+- 最終的な L2 誤差は 0.123 µV（熱電圧の約0.0005%）と極めて高精度
+- 2次精度中心差分法の理論通りの収束性を確認
+
+### 計算結果
+
+#### 電気二重層構造
+
+<div align="center">
+
+![Combined Results](results/combined_results.png)
+
+*図: 電気二重層の数値解析結果。(a) 電位分布（PNP数値解とGouy-Chapman解析解の比較）、(b) 無次元電位、(c) イオン濃度分布（対数スケール）、(d) 空間電荷密度。*
+
+</div>
+
+#### 電位・濃度プロファイル
+
+| プロット | 説明 |
+|----------|------|
+| ![Potential](results/potential_profile.png) | 電位プロファイル：数値解と解析解の比較 |
+| ![Concentration](results/concentration_profiles.png) | イオン濃度：カチオン減少、アニオン増加 |
+
+### 過渡解析（電気二重層の形成過程）
+
+陰的 Scharfetter-Gummel スキームによる真の時間発展計算で、**100 mV ステップ応答**の EDL 形成過程をシミュレーションする。
+
+<div align="center">
+
+![EDL Evolution](results/edl_evolution.gif)
+
+*図: EDL時間発展のアニメーション（0〜200 ns）。左: 電位分布（青: 数値解、赤破線: Gouy-Chapman解析解）、右: イオン濃度分布（赤: カチオン c+、青: アニオン c-）。t=0 で 100 mV をステップ印加し、初期状態（一様濃度）から定常状態への緩和過程を表示。*
+
+</div>
+
+**シミュレーション条件**:
+- 表面電位: 100 mV ステップ印加（t=0 で瞬時に印加）
+- バルク濃度: $c_0 = 1.0$ mol/L
+- 時間刻み: $\Delta t = 10$ ps
+- 計算時間: 200 ns（20,000ステップ）
+- 空間離散化: Scharfetter-Gummel スキーム
+- 時間積分: 陰的 Euler 法 + Gummel 反復
+
+**物理パラメータ**:
+- Debye長: $\lambda_D = 0.12$ nm
+- 熱電圧: $\phi_T = 25.7$ mV
+- 無次元電位: $\psi_0 = \phi_0/\phi_T \approx 3.9$
+- Debye時間: $\tau_D = \lambda_D^2/D \approx 140$ ps
+
+**定常状態の濃度**（約70 ns で収束）:
+- 表面での c+/c₀ ≈ 0.022（カチオン排除）
+- 表面での c-/c₀ ≈ 37（アニオン蓄積）
+
+電位印加直後から急速にイオン再分布が始まり、約70 ns で定常状態に収束する。高濃度イオン液体（1 M）では Debye 長が極めて短く（0.12 nm）、EDL 内の電場が非常に強い（~1 GV/m）ため、ps オーダーのタイムステップが必要となる。
+
+### Gouy-Chapman 理論との比較
+
+**テスト条件**: $c_0 = 0.001$ M, $\phi_0 = 50$ mV, $\varepsilon_r = 12$
+
+| パラメータ | 値 |
+|:-----------|------:|
+| Debye 長 | 11.9 nm |
+| 熱電圧 | 25.7 mV |
+| 無次元電位 $\psi_0$ | 1.95 |
+| L2 誤差 | 0.0066 mV |
+| 相対 L2 誤差 | 0.16 % |
+| L∞ 誤差 | 0.050 mV |
+| 収束反復数 | 4 回 |
+
+## ビルドと実行
+
+### 必要環境
+
+- C++17 対応コンパイラ（g++ 推奨）
+- Python 3 + NumPy + Matplotlib（可視化用）
+
+### ビルド
 
 ```bash
 make
 ```
 
-### Run
+### 実行
 
 ```bash
-# Default parameters (1 M, 100 mV, steady-state)
+# デフォルトパラメータ（1 M, 100 mV, 定常状態）
 make run
 
-# Standard Poisson-Boltzmann
+# 標準 Poisson-Boltzmann
 ./build/pnp_solver --c0 0.1 --phi0 100 --output results/standard.dat
 
-# Bikerman model with steric effects
+# Bikerman モデル（立体効果あり）
 ./build/pnp_solver --c0 0.1 --phi0 100 --model bikerman --ion-size 0.7 --output results/bikerman.dat
 
-# Transient simulation
-./build/pnp_solver --c0 0.1 --phi0 100 --transient --dt 0.1 --t-final 1.0 --output results/transient.dat
+# 一様グリッド
+./build/pnp_solver --stretch 1.0 --output results/uniform.dat
 
-# Available options:
-#   --phi0 <value>      Surface potential in mV (default: 100)
-#   --c0 <value>        Bulk concentration in mol/L (default: 1.0)
-#   --eps <value>       Relative permittivity (default: 12)
-#   --L <value>         Domain length in nm (default: 100)
-#   --N <value>         Number of grid points (default: 1001)
-#   --model <type>      Model: standard or bikerman (default: standard)
-#   --ion-size <value>  Ion diameter in nm for Bikerman (default: 0.7)
-#   --transient         Run transient simulation
-#   --dt <value>        Time step in ns (default: 0.1)
-#   --t-final <value>   Final time in microseconds (default: 1.0)
+# 過渡解析
+./build/pnp_solver --transient --dt 0.1 --t-final 1.0 --output results/transient.dat
 ```
 
-### Visualize
+### コマンドラインオプション
+
+| オプション | 説明 | デフォルト値 |
+|-----------|------|-------------|
+| `--phi0 <value>` | 表面電位 [mV] | 100 |
+| `--c0 <value>` | バルク濃度 [mol/L] | 1.0 |
+| `--eps <value>` | 比誘電率 | 12 |
+| `--L <value>` | 計算領域長 [nm] | 100 |
+| `--N <value>` | グリッド点数 | 1001 |
+| `--stretch <value>` | グリッドストレッチング係数 | 3.0 |
+| `--model <type>` | モデル種類（standard/bikerman） | standard |
+| `--ion-size <value>` | イオン直径 [nm]（Bikerman用） | 0.7 |
+| `--transient` | 過渡解析モード | -- |
+| `--dt <value>` | 時間刻み [ns] | 0.1 |
+| `--t-final <value>` | 終了時間 [µs] | 1.0 |
+| `--animation` | アニメーション用スナップショット保存 | -- |
+| `--snapshot-dir <dir>` | スナップショット出力先 | results/snapshots |
+| `--snapshot-interval <n>` | スナップショット間隔（ステップ数） | 10 |
+| `--output <file>` | 出力ファイル名 | results/pnp_results.dat |
+
+### 可視化
 
 ```bash
+# 結果のプロット
 python3 scripts/plot_results.py
+
+# 収束性解析
+bash scripts/run_convergence.sh
+python3 scripts/plot_convergence.py
+
+# 過渡解析アニメーション生成
+./build/pnp_solver --animation --phi0 100 --c0 0.1 --dt 1.0 --t-final 5 --snapshot-interval 50
+python3 scripts/create_animation.py
 ```
 
-## Results
-
-### Error Metrics
-
-The solver computes the following error metrics against the Gouy-Chapman analytical solution:
-
-**L2 Error (RMS)**:
-```
-L2 = √(Σ(φ_num - φ_GC)² / N)
-```
-
-**Relative L2 Error**:
-```
-L2_rel = L2 / √(Σφ_GC² / N)
-```
-
-**L-infinity Error (Maximum)**:
-```
-L∞ = max|φ_num - φ_GC|
-```
-
-### Validation with Gouy-Chapman Theory
-
-The numerical solution is validated against the analytical Gouy-Chapman solution for dilute electrolytes.
-
-**Test Case**: c₀ = 0.1 M, φ₀ = 100 mV, ε_r = 12
-
-| Parameter | Value |
-|-----------|-------|
-| Debye length | 0.376 nm |
-| Thermal voltage | 25.7 mV |
-| Normalized potential | 3.89 |
-| L2 error | ~1.5 mV |
-| Relative L2 error | ~3.5% |
-| L∞ (max) error | ~4 mV |
-| Convergence | 4 iterations |
-
-### Electric Double Layer Structure
-
-![Combined Results](results/combined_results.png)
-
-*Figure: (a) Electric potential profile comparing numerical PNP solution with Gouy-Chapman theory. (b) Normalized potential. (c) Ion concentration profiles showing cation depletion and anion accumulation near the positively charged surface. (d) Space charge density.*
-
-### Key Observations
-
-1. **Potential decay**: The potential decays exponentially from the surface with characteristic length λ_D
-2. **Ion distribution**: Counterions (anions for positive surface) are enriched, co-ions (cations) are depleted
-3. **Electroneutrality**: The bulk region (x >> λ_D) is electroneutral with c₊ = c₋ = c₀
-4. **Boltzmann statistics**: Ion concentrations follow Boltzmann distribution in equilibrium
-
-## File Structure
+## ファイル構成
 
 ```
 pnp/
 ├── include/
-│   └── pnp_solver.hpp      # Header file
+│   └── pnp_solver.hpp      # ヘッダファイル（クラス定義）
 ├── src/
-│   ├── pnp_solver.cpp      # Solver implementation
-│   └── main.cpp            # Main program
+│   ├── pnp_solver.cpp      # ソルバー実装
+│   └── main.cpp            # メインプログラム
 ├── scripts/
-│   ├── plot_results.py     # Visualization
-│   └── plot_parametric.py  # Parametric study plots
-├── results/                 # Output data and figures
+│   ├── plot_results.py     # 結果可視化スクリプト
+│   ├── plot_convergence.py # 収束性プロット
+│   ├── plot_parametric.py  # パラメトリックスタディ用
+│   ├── create_animation.py # GIFアニメーション生成
+│   └── run_convergence.sh  # 収束性テスト実行スクリプト
+├── results/                # 出力データ・図
 ├── Makefile
 └── README.md
 ```
 
-## Future Work
+## 今後の課題
 
-1. **Carnahan-Starling model**: More accurate equation of state for hard spheres
+1. **Carnahan-Starling モデル**: 硬球の状態方程式をより正確に記述
+2. **2D/3D 拡張**: より複雑な形状への対応
+3. **印加電圧**: 電流が流れる非平衡定常状態
+4. **非対称イオン**: カチオンとアニオンの異なるサイズ
+5. **多成分系**: 複数のイオン種を含む電解質
 
-2. **2D/3D extension**: Extend to higher dimensions for more complex geometries
-
-3. **Applied voltage**: Non-equilibrium steady states with current flow
-
-4. **Asymmetric ions**: Different sizes for cations and anions
-
-5. **Multiple species**: Extension to multi-component electrolytes
-
-## References
+## 参考文献
 
 1. Newman, J., & Thomas-Alyea, K. E. (2004). *Electrochemical Systems* (3rd ed.). Wiley.
 
@@ -337,6 +630,6 @@ pnp/
 
 4. Bazant, M. Z., Storey, B. D., & Kornyshev, A. A. (2011). Double layer in ionic liquids: Overscreening versus crowding. *Physical Review Letters*, 106(4), 046102.
 
-## License
+## ライセンス
 
 MIT License

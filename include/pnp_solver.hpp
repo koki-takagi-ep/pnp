@@ -112,6 +112,50 @@ public:
 
     bool solve();
     void solve_transient(double dt, double t_final);
+    void solve_transient_with_snapshots(double dt, double t_final,
+                                         const std::string& output_dir,
+                                         int snapshot_interval = 10);
+    void solve_transient_gummel(double dt, double t_final,
+                                const std::string& output_dir,
+                                int snapshot_interval = 10);
+    void solve_transient_continuation(int n_steps,
+                                      const std::string& output_dir);
+    void solve_transient_newton(double dt, double t_final,
+                                const std::string& output_dir,
+                                int snapshot_interval = 10);
+
+    /**
+     * @brief Transient solver using Slotboom transformation
+     *
+     * Uses Slotboom variables u± = c± * exp(±φ/φT) to transform the NP equations
+     * into self-adjoint diffusion form, which is more stable and preserves positivity.
+     *
+     * References:
+     * - Slotboom (1969), Electronics Letters
+     * - Liu & Wang (2021), Numerische Mathematik
+     */
+    void solve_transient_slotboom(double dt, double t_final,
+                                  const std::string& output_dir,
+                                  int snapshot_interval = 10);
+
+    /**
+     * @brief Transient solver using Shen-Xu positivity preserving scheme
+     *
+     * Implements the unconditionally positivity preserving and energy dissipative
+     * scheme from Shen & Xu (2021). The key idea is to treat c^n explicitly as
+     * a coefficient and solve for log(c^{n+1}) implicitly.
+     *
+     * Scheme: (c^{n+1} - c^n)/δt = ∇·(D c^n ∇(log c^{n+1} + z*φ^{n+1}/φT))
+     *
+     * This leads to solving a strictly convex minimization problem at each step,
+     * guaranteeing unique solution and positivity regardless of timestep size.
+     *
+     * References:
+     * - Shen & Xu (2021), Numer. Math. 148:671-697
+     */
+    void solve_transient_shenxu(double dt, double t_final,
+                                const std::string& output_dir,
+                                int snapshot_interval = 10);
 
     const std::vector<double>& get_x() const { return x_; }
     const std::vector<double>& get_phi() const { return phi_; }

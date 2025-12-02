@@ -10,6 +10,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <string>
+#include <filesystem>
 
 void print_usage(const char* program_name) {
     std::cout << "Usage: " << program_name << " [options]\n"
@@ -22,9 +23,18 @@ void print_usage(const char* program_name) {
               << "  --output <file>     Output filename (default: results/pnp_results.dat)\n"
               << "  --model <type>      Model type: standard or bikerman (default: standard)\n"
               << "  --ion-size <value>  Ion diameter in nm for Bikerman model (default: 0.7)\n"
+              << "  --stretch <value>   Grid stretching factor (default: 3.0, use 1.0 for uniform)\n"
               << "  --transient         Run transient simulation instead of steady-state\n"
               << "  --dt <value>        Time step in ns for transient (default: 0.1)\n"
               << "  --t-final <value>   Final time in µs for transient (default: 1.0)\n"
+              << "  --animation         Save snapshots for GIF animation (transient mode)\n"
+              << "  --snapshot-dir <dir> Directory for animation snapshots (default: results/snapshots)\n"
+              << "  --snapshot-interval <n> Save snapshot every n steps (default: 10)\n"
+              << "  --gummel            Use Gummel iteration for transient (more stable)\n"
+              << "  --continuation <n>  Use continuation method with n steps (most stable)\n"
+              << "  --newton            Use fully implicit Newton method for transient\n"
+              << "  --slotboom          Use Slotboom transformation for transient (stable)\n"
+              << "  --shenxu            Use Shen-Xu positivity preserving scheme (most stable)\n"
               << "  --help              Show this help message\n"
               << std::endl;
 }
@@ -39,9 +49,19 @@ int main(int argc, char* argv[]) {
     std::string output_file = "results/pnp_results.dat";
     std::string model_type = "standard";  // Model type: standard or bikerman
     double ion_size_nm = 0.7;     // Ion diameter for Bikerman model [nm]
+    double grid_stretch = 3.0;    // Grid stretching factor
     bool run_transient = false;   // Run transient simulation
     double dt_ns = 0.1;           // Time step [ns]
     double t_final_us = 1.0;      // Final time [µs]
+    bool save_animation = false;  // Save snapshots for animation
+    std::string snapshot_dir = "results/snapshots";  // Snapshot output directory
+    int snapshot_interval = 10;   // Save every n steps
+    bool use_gummel = false;      // Use Gummel iteration for transient
+    bool use_continuation = false; // Use continuation method
+    int continuation_steps = 50;   // Number of continuation steps
+    bool use_newton = false;       // Use fully implicit Newton method
+    bool use_slotboom = false;     // Use Slotboom transformation method
+    bool use_shenxu = false;       // Use Shen-Xu positivity preserving scheme
 
     // Parse command line arguments
     for (int i = 1; i < argc; ++i) {
@@ -65,12 +85,37 @@ int main(int argc, char* argv[]) {
             model_type = argv[++i];
         } else if (arg == "--ion-size" && i + 1 < argc) {
             ion_size_nm = std::atof(argv[++i]);
+        } else if (arg == "--stretch" && i + 1 < argc) {
+            grid_stretch = std::atof(argv[++i]);
         } else if (arg == "--transient") {
             run_transient = true;
         } else if (arg == "--dt" && i + 1 < argc) {
             dt_ns = std::atof(argv[++i]);
         } else if (arg == "--t-final" && i + 1 < argc) {
             t_final_us = std::atof(argv[++i]);
+        } else if (arg == "--animation") {
+            save_animation = true;
+            run_transient = true;  // Animation requires transient mode
+        } else if (arg == "--snapshot-dir" && i + 1 < argc) {
+            snapshot_dir = argv[++i];
+        } else if (arg == "--snapshot-interval" && i + 1 < argc) {
+            snapshot_interval = std::atoi(argv[++i]);
+        } else if (arg == "--gummel") {
+            use_gummel = true;
+            run_transient = true;
+        } else if (arg == "--continuation" && i + 1 < argc) {
+            use_continuation = true;
+            continuation_steps = std::atoi(argv[++i]);
+            run_transient = true;
+        } else if (arg == "--newton") {
+            use_newton = true;
+            run_transient = true;
+        } else if (arg == "--slotboom") {
+            use_slotboom = true;
+            run_transient = true;
+        } else if (arg == "--shenxu") {
+            use_shenxu = true;
+            run_transient = true;
         }
     }
 
@@ -87,6 +132,7 @@ int main(int argc, char* argv[]) {
     params.L = L_nm * 1e-9;                // Convert nm to m
     params.N = N;
     params.a = ion_size_nm * 1e-9;         // Convert nm to m
+    params.grid_stretch = grid_stretch;
 
     // Set model type
     if (model_type == "bikerman") {
@@ -109,6 +155,11 @@ int main(int argc, char* argv[]) {
         std::cout << "  Mode: transient\n";
         std::cout << "  Time step: " << dt_ns << " ns\n";
         std::cout << "  Final time: " << t_final_us << " µs\n";
+        if (save_animation) {
+            std::cout << "  Animation: enabled\n";
+            std::cout << "  Snapshot directory: " << snapshot_dir << "\n";
+            std::cout << "  Snapshot interval: " << snapshot_interval << " steps\n";
+        }
     } else {
         std::cout << "  Mode: steady-state\n";
     }
@@ -128,7 +179,42 @@ int main(int argc, char* argv[]) {
         // Transient simulation
         double dt = dt_ns * 1e-9;           // Convert ns to s
         double t_final = t_final_us * 1e-6; // Convert µs to s
-        solver.solve_transient(dt, t_final);
+
+        // Create snapshot directory if needed
+        std::filesystem::create_directories(snapshot_dir);
+
+        if (use_shenxu) {
+            // Use Shen-Xu positivity preserving scheme (unconditionally stable)
+            solver.solve_transient_shenxu(dt, t_final, snapshot_dir, snapshot_interval);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else if (use_slotboom) {
+            // Use Slotboom transformation (most stable for true transient)
+            solver.solve_transient_slotboom(dt, t_final, snapshot_dir, snapshot_interval);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else if (use_newton) {
+            // Use fully implicit Newton method
+            solver.solve_transient_newton(dt, t_final, snapshot_dir, snapshot_interval);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else if (use_continuation) {
+            // Use continuation method (most stable)
+            solver.solve_transient_continuation(continuation_steps, snapshot_dir);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else if (use_gummel) {
+            // Use Gummel iteration (more stable)
+            solver.solve_transient_gummel(dt, t_final, snapshot_dir, snapshot_interval);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else if (save_animation) {
+            solver.solve_transient_with_snapshots(dt, t_final, snapshot_dir, snapshot_interval);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else {
+            solver.solve_transient(dt, t_final);
+        }
     } else {
         // Steady-state solution
         converged = solver.solve();
