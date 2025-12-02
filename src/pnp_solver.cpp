@@ -156,8 +156,14 @@ void PNPSolver1D::initialize() {
 }
 
 void PNPSolver1D::update_concentrations_from_phi() {
+    // Boltzmann distribution uses potential relative to bulk:
+    // c± = c₀ * exp(∓(φ - φ_bulk)/φ_T)
+    // For closed systems, phi_bulk_ is the self-consistently determined bulk potential
+    // For open systems, phi_bulk_ = 0 (bulk is at ground)
     for (int i = 0; i < params_.N; ++i) {
-        double phi_norm = std::clamp(phi_[i] / phi_T_, -50.0, 50.0);
+        // Use potential relative to bulk for Boltzmann distribution
+        double phi_rel_bulk = phi_[i] - phi_bulk_;
+        double phi_norm = std::clamp(phi_rel_bulk / phi_T_, -50.0, 50.0);
 
         if (params_.model == ModelType::BIKERMAN) {
             // Bikerman model: c± = c₀ * exp(∓ψ) / g(ψ)

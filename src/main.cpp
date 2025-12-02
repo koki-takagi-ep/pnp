@@ -253,14 +253,27 @@ int main(int argc, char* argv[]) {
     std::cout << "\n========================================\n";
     std::cout << "Solution Summary:\n";
     std::cout << "========================================\n";
-    std::cout << "  Potential at surface: " << phi[0] * 1000.0 << " mV\n";
-    std::cout << "  Potential at bulk: " << phi.back() * 1000.0 << " mV\n";
-    std::cout << "  c+ at surface: " << c_plus[0] << " mol/m^3 (ratio: "
-              << c_plus[0] / params.c0 << ")\n";
-    std::cout << "  c- at surface: " << c_minus[0] << " mol/m^3 (ratio: "
-              << c_minus[0] / params.c0 << ")\n";
-    std::cout << "  c+ at bulk: " << c_plus.back() << " mol/m^3\n";
-    std::cout << "  c- at bulk: " << c_minus.back() << " mol/m^3\n";
+
+    // Get bulk potential for closed systems
+    double phi_bulk = solver.get_bulk_potential();
+    int n_mid = phi.size() / 2;
+
+    std::cout << "  Left electrode (x=0):\n";
+    std::cout << "    Potential: " << phi[0] * 1000.0 << " mV\n";
+    std::cout << "    c+/c0: " << c_plus[0] / params.c0 << "\n";
+    std::cout << "    c-/c0: " << c_minus[0] / params.c0 << "\n";
+    std::cout << "  Bulk (x=L/2):\n";
+    std::cout << "    Potential: " << phi[n_mid] * 1000.0 << " mV\n";
+    std::cout << "    c+/c0: " << c_plus[n_mid] / params.c0 << "\n";
+    std::cout << "    c-/c0: " << c_minus[n_mid] / params.c0 << "\n";
+    std::cout << "  Right electrode (x=L):\n";
+    std::cout << "    Potential: " << phi.back() * 1000.0 << " mV\n";
+    std::cout << "    c+/c0: " << c_plus.back() / params.c0 << "\n";
+    std::cout << "    c-/c0: " << c_minus.back() / params.c0 << "\n";
+
+    if (params.closed_system) {
+        std::cout << "  Bulk potential (self-consistent): " << phi_bulk * 1000.0 << " mV\n";
+    }
 
     // Compute error metrics against Gouy-Chapman theory
     double L2_error = solver.compute_L2_error();
