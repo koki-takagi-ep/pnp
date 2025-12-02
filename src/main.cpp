@@ -10,6 +10,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <string>
+#include <filesystem>
 
 void print_usage(const char* program_name) {
     std::cout << "Usage: " << program_name << " [options]\n"
@@ -26,6 +27,9 @@ void print_usage(const char* program_name) {
               << "  --transient         Run transient simulation instead of steady-state\n"
               << "  --dt <value>        Time step in ns for transient (default: 0.1)\n"
               << "  --t-final <value>   Final time in µs for transient (default: 1.0)\n"
+              << "  --animation         Save snapshots for GIF animation (transient mode)\n"
+              << "  --snapshot-dir <dir> Directory for animation snapshots (default: results/snapshots)\n"
+              << "  --snapshot-interval <n> Save snapshot every n steps (default: 10)\n"
               << "  --help              Show this help message\n"
               << std::endl;
 }
@@ -44,6 +48,9 @@ int main(int argc, char* argv[]) {
     bool run_transient = false;   // Run transient simulation
     double dt_ns = 0.1;           // Time step [ns]
     double t_final_us = 1.0;      // Final time [µs]
+    bool save_animation = false;  // Save snapshots for animation
+    std::string snapshot_dir = "results/snapshots";  // Snapshot output directory
+    int snapshot_interval = 10;   // Save every n steps
 
     // Parse command line arguments
     for (int i = 1; i < argc; ++i) {
@@ -75,6 +82,13 @@ int main(int argc, char* argv[]) {
             dt_ns = std::atof(argv[++i]);
         } else if (arg == "--t-final" && i + 1 < argc) {
             t_final_us = std::atof(argv[++i]);
+        } else if (arg == "--animation") {
+            save_animation = true;
+            run_transient = true;  // Animation requires transient mode
+        } else if (arg == "--snapshot-dir" && i + 1 < argc) {
+            snapshot_dir = argv[++i];
+        } else if (arg == "--snapshot-interval" && i + 1 < argc) {
+            snapshot_interval = std::atoi(argv[++i]);
         }
     }
 
@@ -114,6 +128,11 @@ int main(int argc, char* argv[]) {
         std::cout << "  Mode: transient\n";
         std::cout << "  Time step: " << dt_ns << " ns\n";
         std::cout << "  Final time: " << t_final_us << " µs\n";
+        if (save_animation) {
+            std::cout << "  Animation: enabled\n";
+            std::cout << "  Snapshot directory: " << snapshot_dir << "\n";
+            std::cout << "  Snapshot interval: " << snapshot_interval << " steps\n";
+        }
     } else {
         std::cout << "  Mode: steady-state\n";
     }
@@ -133,7 +152,16 @@ int main(int argc, char* argv[]) {
         // Transient simulation
         double dt = dt_ns * 1e-9;           // Convert ns to s
         double t_final = t_final_us * 1e-6; // Convert µs to s
-        solver.solve_transient(dt, t_final);
+
+        if (save_animation) {
+            // Create snapshot directory
+            std::filesystem::create_directories(snapshot_dir);
+            solver.solve_transient_with_snapshots(dt, t_final, snapshot_dir, snapshot_interval);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else {
+            solver.solve_transient(dt, t_final);
+        }
     } else {
         // Steady-state solution
         converged = solver.solve();

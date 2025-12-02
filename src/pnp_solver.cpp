@@ -14,6 +14,7 @@
 #include <numeric>
 #include <cmath>
 #include <limits>
+#include <sstream>
 
 namespace pnp {
 
@@ -486,6 +487,193 @@ void PNPSolver1D::solve_transient(double dt, double t_final) {
     }
 
     std::cout << "  Transient simulation completed.\n";
+}
+
+void PNPSolver1D::solve_transient_with_snapshots(double dt, double t_final,
+                                                  const std::string& output_dir,
+                                                  int snapshot_interval) {
+    /**
+     * Transient PNP solver with snapshot output for animation
+     * Saves potential and concentration profiles at regular intervals
+     */
+
+    int n_steps = static_cast<int>(t_final / dt);
+    int n = params_.N;
+    double e = PhysicalConstants::e;
+    double kT = PhysicalConstants::kB * params_.T;
+
+    std::cout << "\n========================================\n";
+    std::cout << "  Starting Transient Solver (with snapshots)\n";
+    std::cout << "========================================\n";
+    std::cout << "  Time step: " << dt * 1e9 << " ns\n";
+    std::cout << "  Total time: " << t_final * 1e6 << " µs\n";
+    std::cout << "  Number of steps: " << n_steps << "\n";
+    std::cout << "  Snapshot interval: " << snapshot_interval << " steps\n";
+    std::cout << "  Output directory: " << output_dir << "\n";
+
+    // Save time info file
+    std::ofstream time_file(output_dir + "/time_info.dat");
+    time_file << "# Snapshot time information\n";
+    time_file << "# snapshot_index  time_ns\n";
+
+    // Store previous concentrations for convergence check
+    std::vector<double> c_plus_old(n), c_minus_old(n);
+
+    int snapshot_count = 0;
+    bool steady_state_reached = false;
+
+    // Save initial state (t=0)
+    {
+        std::ostringstream ss;
+        ss << output_dir << "/snapshot_" << std::setfill('0') << std::setw(5) << snapshot_count << ".dat";
+        save_results(ss.str());
+        time_file << snapshot_count << "\t" << 0.0 << "\n";
+        snapshot_count++;
+    }
+
+    for (int step = 0; step < n_steps; ++step) {
+        // Store old values
+        c_plus_old = c_plus_;
+        c_minus_old = c_minus_;
+
+        // Step 1: Solve Poisson equation (quasi-static assumption)
+        for (int newton_iter = 0; newton_iter < 20; ++newton_iter) {
+            std::vector<double> a(n, 0.0), b(n, 0.0), c(n, 0.0), rhs(n, 0.0);
+
+            b[0] = 1.0;
+            rhs[0] = 0.0;
+
+            for (int i = 1; i < n - 1; ++i) {
+                double dx_plus = x_[i + 1] - x_[i];
+                double dx_minus = x_[i] - x_[i - 1];
+                double dx_avg = 0.5 * (dx_plus + dx_minus);
+
+                double rho_i = PhysicalConstants::NA * e *
+                               (params_.z_plus * c_plus_[i] + params_.z_minus * c_minus_[i]);
+
+                double lap_minus = 1.0 / (dx_minus * dx_avg);
+                double lap_plus = 1.0 / (dx_plus * dx_avg);
+                double lap_center = -lap_minus - lap_plus;
+
+                double laplacian = (phi_[i + 1] - phi_[i]) / dx_plus
+                                 - (phi_[i] - phi_[i - 1]) / dx_minus;
+                laplacian /= dx_avg;
+
+                a[i] = lap_minus;
+                c[i] = lap_plus;
+                b[i] = lap_center;
+                rhs[i] = rho_i / eps_ - laplacian;
+            }
+
+            b[n - 1] = 1.0;
+            rhs[n - 1] = 0.0;
+
+            std::vector<double> delta_phi = solve_tridiagonal(a, b, c, rhs);
+
+            double max_delta = 0.0;
+            for (int i = 1; i < n - 1; ++i) {
+                phi_[i] += delta_phi[i];
+                max_delta = std::max(max_delta, std::abs(delta_phi[i]));
+            }
+
+            if (max_delta < 1e-10) break;
+        }
+
+        // Step 2: Update concentrations using implicit Nernst-Planck
+        for (int species = 0; species < 2; ++species) {
+            double D = (species == 0) ? params_.D_plus : params_.D_minus;
+            int z = (species == 0) ? params_.z_plus : params_.z_minus;
+            std::vector<double>& conc = (species == 0) ? c_plus_ : c_minus_;
+            const std::vector<double>& conc_old = (species == 0) ? c_plus_old : c_minus_old;
+
+            std::vector<double> a(n, 0.0), b(n, 0.0), c_vec(n, 0.0), rhs(n, 0.0);
+
+            double dx0 = x_[1] - x_[0];
+            double dphi_dx0 = (phi_[1] - phi_[0]) / dx0;
+            double flux_coeff = z * e / kT * dphi_dx0;
+
+            b[0] = 1.0 + dt * D / (dx0 * dx0) - dt * D * flux_coeff / dx0;
+            c_vec[0] = -dt * D / (dx0 * dx0);
+            rhs[0] = conc_old[0];
+
+            for (int i = 1; i < n - 1; ++i) {
+                double dx_plus = x_[i + 1] - x_[i];
+                double dx_minus = x_[i] - x_[i - 1];
+                double dx_avg = 0.5 * (dx_plus + dx_minus);
+
+                double E_plus = -(phi_[i + 1] - phi_[i]) / dx_plus;
+                double E_minus = -(phi_[i] - phi_[i - 1]) / dx_minus;
+
+                double v_plus = z * e * E_plus / kT;
+                double v_minus = z * e * E_minus / kT;
+
+                double B_plus_p = bernoulli(v_plus * dx_plus);
+                double B_plus_m = bernoulli(-v_plus * dx_plus);
+                double B_minus_p = bernoulli(v_minus * dx_minus);
+                double B_minus_m = bernoulli(-v_minus * dx_minus);
+
+                double alpha = D * dt / (dx_avg * dx_avg);
+
+                a[i] = -alpha * B_minus_p / dx_minus * dx_avg;
+                c_vec[i] = -alpha * B_plus_m / dx_plus * dx_avg;
+                b[i] = 1.0 + alpha * (B_minus_m / dx_minus + B_plus_p / dx_plus) * dx_avg;
+                rhs[i] = conc_old[i];
+            }
+
+            b[n - 1] = 1.0;
+            rhs[n - 1] = params_.c0;
+
+            conc = solve_tridiagonal(a, b, c_vec, rhs);
+
+            for (int i = 0; i < n; ++i) {
+                conc[i] = std::max(conc[i], 1e-10 * params_.c0);
+            }
+        }
+
+        // Save snapshot at specified intervals
+        if ((step + 1) % snapshot_interval == 0) {
+            std::ostringstream ss;
+            ss << output_dir << "/snapshot_" << std::setfill('0') << std::setw(5) << snapshot_count << ".dat";
+            save_results(ss.str());
+            double time_ns = (step + 1) * dt * 1e9;
+            time_file << snapshot_count << "\t" << time_ns << "\n";
+            snapshot_count++;
+        }
+
+        // Check for steady state and print progress
+        if (step % std::max(1, n_steps / 20) == 0 || step == n_steps - 1) {
+            double max_change_plus = 0.0, max_change_minus = 0.0;
+            for (int i = 0; i < n; ++i) {
+                max_change_plus = std::max(max_change_plus,
+                    std::abs(c_plus_[i] - c_plus_old[i]) / params_.c0);
+                max_change_minus = std::max(max_change_minus,
+                    std::abs(c_minus_[i] - c_minus_old[i]) / params_.c0);
+            }
+
+            double time_ns = (step + 1) * dt * 1e9;
+            std::cout << "  t = " << std::fixed << std::setprecision(1) << time_ns
+                      << " ns: Δc+/c0 = " << std::scientific << std::setprecision(2)
+                      << max_change_plus << ", Δc-/c0 = " << max_change_minus << "\n";
+
+            if (max_change_plus < 1e-8 && max_change_minus < 1e-8) {
+                std::cout << "  Steady state reached at step " << step << "\n";
+                steady_state_reached = true;
+
+                // Save final steady state
+                std::ostringstream ss;
+                ss << output_dir << "/snapshot_" << std::setfill('0') << std::setw(5) << snapshot_count << ".dat";
+                save_results(ss.str());
+                double time_ns_final = (step + 1) * dt * 1e9;
+                time_file << snapshot_count << "\t" << time_ns_final << "\n";
+                snapshot_count++;
+                break;
+            }
+        }
+    }
+
+    time_file.close();
+    std::cout << "  Total snapshots saved: " << snapshot_count << "\n";
+    std::cout << "  Transient simulation with snapshots completed.\n";
 }
 
 double PNPSolver1D::get_debye_length() const {

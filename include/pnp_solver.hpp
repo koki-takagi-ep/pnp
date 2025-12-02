@@ -112,6 +112,9 @@ public:
 
     bool solve();
     void solve_transient(double dt, double t_final);
+    void solve_transient_with_snapshots(double dt, double t_final,
+                                         const std::string& output_dir,
+                                         int snapshot_interval = 10);
 
     const std::vector<double>& get_x() const { return x_; }
     const std::vector<double>& get_phi() const { return phi_; }
