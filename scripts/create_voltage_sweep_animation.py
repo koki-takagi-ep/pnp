@@ -49,7 +49,7 @@ def load_data(filename):
 
 def create_frame(data, phi0, frame_idx, output_path, phi0_target, x_max=50):
     """Create a single frame for the animation."""
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(6, 2.5))
 
     # (a) Electric potential
     ax = axes[0]

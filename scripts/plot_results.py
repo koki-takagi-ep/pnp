@@ -41,7 +41,7 @@ def load_data(filename):
 
 def plot_potential(data, output_dir):
     """Plot electric potential profile with GC comparison."""
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(3, 3))
 
     ax.plot(data['x_nm'], data['phi_mV'], 'b-', label='PNP numerical', linewidth=1.5)
     ax.plot(data['x_nm'], data['phi_gc_mV'], 'r--', label='Gouy-Chapman', linewidth=1.5)
@@ -62,7 +62,7 @@ def plot_potential(data, output_dir):
 
 def plot_concentrations(data, output_dir):
     """Plot ion concentration profiles."""
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(3, 3))
 
     ax.plot(data['x_nm'], data['c_plus_norm'], 'r-', label=r'$c_+/c_0$ (cation)', linewidth=1.5)
     ax.plot(data['x_nm'], data['c_minus_norm'], 'b-', label=r'$c_-/c_0$ (anion)', linewidth=1.5)
@@ -85,7 +85,7 @@ def plot_concentrations(data, output_dir):
 
 def plot_charge_density(data, output_dir):
     """Plot charge density profile."""
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(3, 3))
 
     ax.plot(data['x_nm'], data['rho'] / 1e6, 'g-', linewidth=1.5)
     ax.axhline(y=0, color='gray', linestyle=':', linewidth=1)
@@ -105,7 +105,7 @@ def plot_charge_density(data, output_dir):
 
 def plot_combined(data, output_dir):
     """Create a combined 2x2 plot."""
-    fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+    fig, axes = plt.subplots(2, 2, figsize=(5, 5))
 
     # (a) Potential
     ax = axes[0, 0]
@@ -183,7 +183,7 @@ def compute_error_metrics(data):
 
 def plot_error_analysis(data, output_dir):
     """Plot error analysis comparing PNP with Gouy-Chapman."""
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(3, 3))
 
     error = np.abs(data['phi_mV'] - data['phi_gc_mV'])
     ax.plot(data['x_nm'], error, 'k-', linewidth=1.5)
@@ -212,7 +212,7 @@ def plot_error_analysis(data, output_dir):
 
 def plot_grid_distribution(data, output_dir):
     """Plot grid point distribution."""
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(3, 3))
 
     x_nm = data['x_nm']
     ax.plot(range(len(x_nm)), x_nm, 'b.-', linewidth=1, markersize=2)

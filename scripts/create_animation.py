@@ -69,7 +69,7 @@ def load_time_info(snapshot_dir):
 
 def create_frame(data, time_ns, frame_idx, output_path, x_max=50, x_max_conc=20):
     """Create a single frame for the animation."""
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(6, 2.5))
 
     # (a) Electric potential - full domain view
     ax = axes[0]
