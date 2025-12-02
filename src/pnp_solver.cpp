@@ -910,9 +910,24 @@ void PNPSolver1D::solve_transient_gummel(double dt, double t_final,
                     rhs_c[i] = conc_n[i];
                 }
 
-                // Right BC: Dirichlet (bulk)
-                b_c[n - 1] = 1.0;
-                rhs_c[n - 1] = params_.c0;
+                // Right BC: depends on closed_system flag
+                if (params_.closed_system) {
+                    // Zero-flux BC (blocking electrode)
+                    double dx_last = x_[n - 1] - x_[n - 2];
+                    double v_last = -z * e / kT * (phi_[n - 1] - phi_[n - 2]) / dx_last;
+                    double B_last_p = bernoulli(v_last * dx_last);
+                    double B_last_m = bernoulli(-v_last * dx_last);
+                    double alpha_last = D * dt / (dx_last * dx_last);
+
+                    a_c[n - 1] = -alpha_last * B_last_p;
+                    b_c[n - 1] = 1.0 + alpha_last * B_last_m;
+                    c_c[n - 1] = 0.0;
+                    rhs_c[n - 1] = conc_n[n - 1];
+                } else {
+                    // Dirichlet BC (bulk concentration)
+                    b_c[n - 1] = 1.0;
+                    rhs_c[n - 1] = params_.c0;
+                }
 
                 std::vector<double> conc_new = solve_tridiagonal(a_c, b_c, c_c, rhs_c);
 
