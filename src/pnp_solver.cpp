@@ -333,6 +333,10 @@ void PNPSolver1D::solve_transient(double dt, double t_final) {
      *   ∂c±/∂t = D± ∂/∂x [∂c±/∂x ± (e c±)/(kT) ∂φ/∂x]
      *   ∇²φ = -ρ/ε  (quasi-static Poisson)
      *
+     * Initial conditions:
+     *   - Uniform bulk concentration throughout domain
+     *   - Linear potential profile from surface to bulk
+     *
      * Algorithm at each time step:
      *   1. Solve Poisson equation for φ given current c±
      *   2. Update c± using implicit Nernst-Planck discretization
@@ -351,6 +355,19 @@ void PNPSolver1D::solve_transient(double dt, double t_final) {
     std::cout << "  Total time: " << t_final * 1e6 << " µs\n";
     std::cout << "  Number of steps: " << n_steps << "\n";
 
+    // Set initial conditions for transient analysis
+    // Physical initial state: uniform concentration, linear potential
+    std::cout << "  Initial conditions: uniform c0, linear φ profile\n";
+
+    for (int i = 0; i < n; ++i) {
+        c_plus_[i] = params_.c0;
+        c_minus_[i] = params_.c0;
+        double xi = x_[i] / params_.L;
+        phi_[i] = params_.phi_left * (1.0 - xi) + params_.phi_right * xi;
+    }
+    phi_[0] = params_.phi_left;
+    phi_[n - 1] = params_.phi_right;
+
     // Store previous concentrations for convergence check
     std::vector<double> c_plus_old(n), c_minus_old(n);
 
@@ -360,12 +377,13 @@ void PNPSolver1D::solve_transient(double dt, double t_final) {
         c_minus_old = c_minus_;
 
         // Step 1: Solve Poisson equation (quasi-static assumption)
-        // Use a few Newton iterations for Poisson
+        // ∇²φ = -ρ/ε with BCs: φ(0) = φ_left, φ(L) = φ_right = 0
         for (int newton_iter = 0; newton_iter < 20; ++newton_iter) {
             std::vector<double> a(n, 0.0), b(n, 0.0), c(n, 0.0), rhs(n, 0.0);
 
+            // Left boundary: φ(0) = φ_left (Dirichlet)
             b[0] = 1.0;
-            rhs[0] = 0.0;
+            rhs[0] = params_.phi_left - phi_[0];
 
             for (int i = 1; i < n - 1; ++i) {
                 double dx_plus = x_[i + 1] - x_[i];
@@ -390,13 +408,14 @@ void PNPSolver1D::solve_transient(double dt, double t_final) {
                 rhs[i] = rho_i / eps_ - laplacian;
             }
 
+            // Right boundary: φ(L) = φ_right = 0 (Dirichlet)
             b[n - 1] = 1.0;
-            rhs[n - 1] = 0.0;
+            rhs[n - 1] = params_.phi_right - phi_[n - 1];
 
             std::vector<double> delta_phi = solve_tridiagonal(a, b, c, rhs);
 
             double max_delta = 0.0;
-            for (int i = 1; i < n - 1; ++i) {
+            for (int i = 0; i < n; ++i) {  // Update all nodes including boundaries
                 phi_[i] += delta_phi[i];
                 max_delta = std::max(max_delta, std::abs(delta_phi[i]));
             }
@@ -494,7 +513,24 @@ void PNPSolver1D::solve_transient_with_snapshots(double dt, double t_final,
                                                   int snapshot_interval) {
     /**
      * Transient PNP solver with snapshot output for animation
-     * Saves potential and concentration profiles at regular intervals
+     *
+     * Physical setup:
+     *   - Initial condition: uniform bulk concentration, zero potential
+     *   - At t=0, surface potential is applied (step function)
+     *   - System evolves toward equilibrium EDL structure
+     *
+     * Numerical scheme:
+     *   - Implicit time stepping for stability
+     *   - Scharfetter-Gummel scheme for drift-diffusion flux
+     *   - Quasi-static Poisson solver at each time step
+     *
+     * Boundary conditions:
+     *   - Left (x=0): Fixed potential (Dirichlet), zero ion flux (blocking electrode)
+     *   - Right (x=L): Zero potential, bulk concentration (Dirichlet)
+     *
+     * References:
+     *   - Bazant et al., Phys. Rev. E 70, 021506 (2004) - EDL charging dynamics
+     *   - Scharfetter & Gummel, IEEE Trans. ED 16, 64 (1969) - SG scheme
      */
 
     int n_steps = static_cast<int>(t_final / dt);
@@ -510,6 +546,34 @@ void PNPSolver1D::solve_transient_with_snapshots(double dt, double t_final,
     std::cout << "  Number of steps: " << n_steps << "\n";
     std::cout << "  Snapshot interval: " << snapshot_interval << " steps\n";
     std::cout << "  Output directory: " << output_dir << "\n";
+
+    // ============================================
+    // Set initial conditions for transient analysis
+    // ============================================
+    // Physical initial state: uniform concentration, zero potential everywhere
+    // Then at t=0+, surface potential is applied as step function
+
+    std::cout << "\n  Setting initial conditions:\n";
+    std::cout << "    - Uniform concentration: c = c0 = " << params_.c0 << " mol/m³\n";
+    std::cout << "    - Initial potential: φ = 0 (then step to φ0 at surface)\n";
+
+    // Initialize with uniform bulk concentration
+    for (int i = 0; i < n; ++i) {
+        c_plus_[i] = params_.c0;
+        c_minus_[i] = params_.c0;
+    }
+
+    // Initialize potential: linear profile from surface to bulk
+    // This provides a smooth initial condition that respects BCs
+    for (int i = 0; i < n; ++i) {
+        // Linear interpolation: φ(x) = φ_left * (1 - x/L) + φ_right * (x/L)
+        double xi = x_[i] / params_.L;
+        phi_[i] = params_.phi_left * (1.0 - xi) + params_.phi_right * xi;
+    }
+
+    // Enforce boundary conditions exactly
+    phi_[0] = params_.phi_left;
+    phi_[n - 1] = params_.phi_right;
 
     // Save time info file
     std::ofstream time_file(output_dir + "/time_info.dat");
@@ -537,17 +601,20 @@ void PNPSolver1D::solve_transient_with_snapshots(double dt, double t_final,
         c_minus_old = c_minus_;
 
         // Step 1: Solve Poisson equation (quasi-static assumption)
+        // ∇²φ = -ρ/ε with BCs: φ(0) = φ_left, φ(L) = φ_right = 0
         for (int newton_iter = 0; newton_iter < 20; ++newton_iter) {
             std::vector<double> a(n, 0.0), b(n, 0.0), c(n, 0.0), rhs(n, 0.0);
 
+            // Left boundary: φ(0) = φ_left (Dirichlet)
             b[0] = 1.0;
-            rhs[0] = 0.0;
+            rhs[0] = params_.phi_left - phi_[0];  // Newton update to reach φ_left
 
             for (int i = 1; i < n - 1; ++i) {
                 double dx_plus = x_[i + 1] - x_[i];
                 double dx_minus = x_[i] - x_[i - 1];
                 double dx_avg = 0.5 * (dx_plus + dx_minus);
 
+                // Charge density from current concentrations
                 double rho_i = PhysicalConstants::NA * e *
                                (params_.z_plus * c_plus_[i] + params_.z_minus * c_minus_[i]);
 
@@ -555,6 +622,7 @@ void PNPSolver1D::solve_transient_with_snapshots(double dt, double t_final,
                 double lap_plus = 1.0 / (dx_plus * dx_avg);
                 double lap_center = -lap_minus - lap_plus;
 
+                // Residual: ∇²φ + ρ/ε = 0
                 double laplacian = (phi_[i + 1] - phi_[i]) / dx_plus
                                  - (phi_[i] - phi_[i - 1]) / dx_minus;
                 laplacian /= dx_avg;
@@ -565,13 +633,14 @@ void PNPSolver1D::solve_transient_with_snapshots(double dt, double t_final,
                 rhs[i] = rho_i / eps_ - laplacian;
             }
 
+            // Right boundary: φ(L) = φ_right = 0 (Dirichlet)
             b[n - 1] = 1.0;
-            rhs[n - 1] = 0.0;
+            rhs[n - 1] = params_.phi_right - phi_[n - 1];
 
             std::vector<double> delta_phi = solve_tridiagonal(a, b, c, rhs);
 
             double max_delta = 0.0;
-            for (int i = 1; i < n - 1; ++i) {
+            for (int i = 0; i < n; ++i) {  // Update all nodes including boundaries
                 phi_[i] += delta_phi[i];
                 max_delta = std::max(max_delta, std::abs(delta_phi[i]));
             }

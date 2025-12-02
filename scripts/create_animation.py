@@ -67,11 +67,11 @@ def load_time_info(snapshot_dir):
     return times
 
 
-def create_frame(data, time_ns, frame_idx, output_path, x_max=50):
+def create_frame(data, time_ns, frame_idx, output_path, x_max=50, x_max_conc=20):
     """Create a single frame for the animation."""
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-    # (a) Electric potential
+    # (a) Electric potential - full domain view
     ax = axes[0]
     ax.plot(data['x_nm'], data['phi_mV'], 'b-', linewidth=2, label='PNP (transient)')
     ax.plot(data['x_nm'], data['phi_gc_mV'], 'r--', linewidth=1.5, alpha=0.7, label='G-C (steady)')
@@ -80,21 +80,25 @@ def create_frame(data, time_ns, frame_idx, output_path, x_max=50):
     ax.set_title('Electric Potential', fontsize=11, fontweight='bold')
     ax.legend(loc='upper right', fontsize=9)
     ax.set_xlim([0, x_max])
-    ax.set_ylim([0, data['phi_mV'].max() * 1.1])
+    phi_max = max(data['phi_mV'].max(), data['phi_gc_mV'].max())
+    ax.set_ylim([0, phi_max * 1.1])
     setup_axis_style(ax)
 
-    # (b) Ion concentrations
+    # (b) Ion concentrations - zoom in to EDL region (linear scale)
     ax = axes[1]
     ax.plot(data['x_nm'], data['c_plus_norm'], 'r-', linewidth=2, label=r'$c_+/c_0$ (cation)')
     ax.plot(data['x_nm'], data['c_minus_norm'], 'b-', linewidth=2, label=r'$c_-/c_0$ (anion)')
     ax.axhline(y=1.0, color='gray', linestyle=':', linewidth=1)
     ax.set_xlabel(r'$x$ [nm]', fontsize=11, fontweight='bold')
     ax.set_ylabel(r'$c / c_0$', fontsize=11, fontweight='bold')
-    ax.set_title('Ion Concentrations', fontsize=11, fontweight='bold')
+    ax.set_title('Ion Concentrations (EDL region)', fontsize=11, fontweight='bold')
     ax.legend(loc='upper right', fontsize=9)
-    ax.set_xlim([0, x_max])
-    ax.set_yscale('log')
-    ax.set_ylim([0.01, 100])
+    ax.set_xlim([0, x_max_conc])  # Zoom in for concentration
+    # Use linear scale to better show small changes
+    c_min = min(data['c_plus_norm'].min(), data['c_minus_norm'].min())
+    c_max = max(data['c_plus_norm'].max(), data['c_minus_norm'].max())
+    margin = (c_max - c_min) * 0.1 + 0.05
+    ax.set_ylim([min(0.9, c_min - margin), max(1.1, c_max + margin)])
     setup_axis_style(ax)
 
     # Add time annotation
@@ -147,11 +151,14 @@ def main():
     output_gif = Path('results/edl_evolution.gif')
     x_max = 50  # Max x to show in plots [nm]
     fps = 10
+    max_frames = 100  # Maximum number of frames for GIF
 
     if len(sys.argv) > 1:
         snapshot_dir = Path(sys.argv[1])
     if len(sys.argv) > 2:
         output_gif = Path(sys.argv[2])
+    if len(sys.argv) > 3:
+        max_frames = int(sys.argv[3])
 
     print(f"Loading snapshots from: {snapshot_dir}")
 
@@ -164,6 +171,12 @@ def main():
         sys.exit(1)
 
     print(f"Found {len(snapshot_files)} snapshots")
+
+    # Subsample if too many snapshots
+    if len(snapshot_files) > max_frames:
+        step = len(snapshot_files) // max_frames
+        snapshot_files = snapshot_files[::step][:max_frames]
+        print(f"Subsampled to {len(snapshot_files)} frames")
 
     # Load time information
     time_info = load_time_info(snapshot_dir)
@@ -184,7 +197,9 @@ def main():
     frame_files = []
     for idx, snapshot_file in enumerate(snapshot_files):
         data = load_snapshot(snapshot_file)
-        time_ns = time_info.get(idx, idx * 1.0)
+        # Extract snapshot index from filename
+        snapshot_idx = int(Path(snapshot_file).stem.split('_')[-1])
+        time_ns = time_info.get(snapshot_idx, snapshot_idx * 1.0)
 
         frame_path = frame_dir / f'frame_{idx:05d}.png'
         create_frame(data, time_ns, idx, frame_path, x_max=x_max)
