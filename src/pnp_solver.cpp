@@ -60,9 +60,9 @@ std::string PNPSolver1D::get_model_name() const {
 }
 
 void PNPSolver1D::create_nonuniform_grid() {
-    // Create non-uniform grid with clustering near x=0 (interface)
-    // Using transformation: x = L * [1 - (1 - ξ)^β] where ξ ∈ [0, 1]
-    // β > 1 gives finer spacing near x=0
+    // Create non-uniform grid
+    // For single electrode (open system): cluster near x=0 only
+    // For dual electrode (closed system or phi_right != 0): cluster near both ends
 
     int n = params_.N;
     double L = params_.L;
@@ -71,9 +71,34 @@ void PNPSolver1D::create_nonuniform_grid() {
     x_.resize(n);
     dx_.resize(n);
 
-    for (int i = 0; i < n; ++i) {
-        double xi = static_cast<double>(i) / (n - 1);  // ξ ∈ [0, 1]
-        x_[i] = L * (1.0 - std::pow(1.0 - xi, beta));
+    // Check if we need symmetric grid (dual electrode model)
+    bool symmetric_grid = params_.closed_system ||
+                          (std::abs(params_.phi_right) > 1e-10);
+
+    if (symmetric_grid && beta > 1.0) {
+        // Symmetric grid: cluster near both x=0 and x=L
+        // Using hyperbolic tangent stretching for symmetric clustering
+        // x = L/2 * [1 + tanh(α*(2ξ-1)) / tanh(α)]
+        // where α controls the stretching (larger = more clustering at ends)
+        double alpha = std::log(beta + std::sqrt(beta * beta - 1));  // Convert beta to alpha
+        if (alpha < 0.5) alpha = 0.5;  // Minimum stretching
+
+        for (int i = 0; i < n; ++i) {
+            double xi = static_cast<double>(i) / (n - 1);  // ξ ∈ [0, 1]
+            // Symmetric stretching using tanh
+            double eta = 2.0 * xi - 1.0;  // η ∈ [-1, 1]
+            x_[i] = L * 0.5 * (1.0 + std::tanh(alpha * eta) / std::tanh(alpha));
+        }
+        std::cout << "  Grid type: symmetric (dual-electrode)\n";
+    } else {
+        // Original single-sided clustering near x=0
+        // Using transformation: x = L * [1 - (1 - ξ)^β] where ξ ∈ [0, 1]
+        // β > 1 gives finer spacing near x=0
+        for (int i = 0; i < n; ++i) {
+            double xi = static_cast<double>(i) / (n - 1);  // ξ ∈ [0, 1]
+            x_[i] = L * (1.0 - std::pow(1.0 - xi, beta));
+        }
+        std::cout << "  Grid type: single-sided (left electrode)\n";
     }
 
     // Compute local grid spacing
@@ -90,12 +115,17 @@ void PNPSolver1D::create_nonuniform_grid() {
     std::cout << "  Grid spacing range: " << dx_min * 1e9 << " - " << dx_max * 1e9 << " nm\n";
     std::cout << "  Min spacing / Debye length: " << dx_min / lambda_D_ << "\n";
 
-    // Count points within 5 Debye lengths
-    int points_in_edl = 0;
+    // Count points within 5 Debye lengths of each boundary
+    int points_in_left_edl = 0;
+    int points_in_right_edl = 0;
     for (int i = 0; i < n; ++i) {
-        if (x_[i] < 5.0 * lambda_D_) points_in_edl++;
+        if (x_[i] < 5.0 * lambda_D_) points_in_left_edl++;
+        if (x_[i] > L - 5.0 * lambda_D_) points_in_right_edl++;
     }
-    std::cout << "  Points within 5*λ_D: " << points_in_edl << "\n";
+    std::cout << "  Points within 5*λ_D of left: " << points_in_left_edl << "\n";
+    if (symmetric_grid) {
+        std::cout << "  Points within 5*λ_D of right: " << points_in_right_edl << "\n";
+    }
 }
 
 void PNPSolver1D::initialize() {
