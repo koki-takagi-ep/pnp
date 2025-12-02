@@ -22,6 +22,7 @@ void print_usage(const char* program_name) {
               << "  --output <file>     Output filename (default: results/pnp_results.dat)\n"
               << "  --model <type>      Model type: standard or bikerman (default: standard)\n"
               << "  --ion-size <value>  Ion diameter in nm for Bikerman model (default: 0.7)\n"
+              << "  --stretch <value>   Grid stretching factor (default: 3.0, use 1.0 for uniform)\n"
               << "  --transient         Run transient simulation instead of steady-state\n"
               << "  --dt <value>        Time step in ns for transient (default: 0.1)\n"
               << "  --t-final <value>   Final time in µs for transient (default: 1.0)\n"
@@ -39,6 +40,7 @@ int main(int argc, char* argv[]) {
     std::string output_file = "results/pnp_results.dat";
     std::string model_type = "standard";  // Model type: standard or bikerman
     double ion_size_nm = 0.7;     // Ion diameter for Bikerman model [nm]
+    double grid_stretch = 3.0;    // Grid stretching factor
     bool run_transient = false;   // Run transient simulation
     double dt_ns = 0.1;           // Time step [ns]
     double t_final_us = 1.0;      // Final time [µs]
@@ -65,6 +67,8 @@ int main(int argc, char* argv[]) {
             model_type = argv[++i];
         } else if (arg == "--ion-size" && i + 1 < argc) {
             ion_size_nm = std::atof(argv[++i]);
+        } else if (arg == "--stretch" && i + 1 < argc) {
+            grid_stretch = std::atof(argv[++i]);
         } else if (arg == "--transient") {
             run_transient = true;
         } else if (arg == "--dt" && i + 1 < argc) {
@@ -87,6 +91,7 @@ int main(int argc, char* argv[]) {
     params.L = L_nm * 1e-9;                // Convert nm to m
     params.N = N;
     params.a = ion_size_nm * 1e-9;         // Convert nm to m
+    params.grid_stretch = grid_stretch;
 
     // Set model type
     if (model_type == "bikerman") {
