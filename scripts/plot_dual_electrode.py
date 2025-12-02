@@ -56,49 +56,71 @@ ax2.set_ylim([1e-1, 1e1])
 ax2.grid(True, alpha=0.3)
 ax2.legend(loc='upper right')
 
-# Bottom left: Left electrode EDL (zoomed) - Linear scale
+# Bottom left: Left electrode EDL (zoomed) - Linear scale with potential
 ax3 = fig.add_subplot(2, 2, 3)
 mask_left = x_nm <= 0.5
 x_left_pm = x_nm[mask_left] * 1000  # pm
 
-ax3.plot(x_left_pm, c_plus_ratio[mask_left], 'r-', linewidth=2, marker='o', markersize=3, label='c$_+$/c$_0$ (EMI$^+$)')
-ax3.plot(x_left_pm, c_minus_ratio[mask_left], 'b-', linewidth=2, marker='s', markersize=3, label='c$_-$/c$_0$ (BF$_4^-$)')
-ax3.axhline(y=1, color='gray', linestyle='--', linewidth=0.5, label='bulk')
+# Plot potential on left axis
+ax3.plot(x_left_pm, phi_mV[mask_left], 'k-', linewidth=2, label='φ [mV]')
 ax3.set_xlabel('Distance from anode [pm]')
-ax3.set_ylabel('c/c$_0$ [-]')
+ax3.set_ylabel('φ [mV]')
 ax3.set_title('(c) Left EDL (Anode, φ = +50 mV)\nBF$_4^-$ accumulation, EMI$^+$ depletion')
 ax3.set_xlim([0, 500])
-ax3.set_ylim([0, 8])
+ax3.set_ylim([0, 55])
 ax3.grid(True, alpha=0.3)
-ax3.fill_between(x_left_pm, 0, c_minus_ratio[mask_left], alpha=0.2, color='blue')
 
 # Add characteristic length markers
 ax3.axvline(x=lambda_D_pm, color='purple', linestyle=':', linewidth=2, label=f'λ$_D$ = {lambda_D_pm} pm')
 ax3.axvline(x=d_EMI_pm, color='red', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'd$_{{EMI^+}}$ = {d_EMI_pm} pm')
 ax3.axvline(x=d_BF4_pm, color='blue', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'd$_{{BF_4^-}}$ = {d_BF4_pm} pm')
-ax3.legend(loc='upper right', fontsize=9)
 
-# Bottom right: Right electrode EDL (zoomed) - Linear scale
+# Second y-axis for concentration (linear scale)
+ax3b = ax3.twinx()
+ax3b.plot(x_left_pm, c_plus_ratio[mask_left], 'r--', linewidth=2, marker='o', markersize=2, label='c$_+$/c$_0$ (EMI$^+$)')
+ax3b.plot(x_left_pm, c_minus_ratio[mask_left], 'b--', linewidth=2, marker='s', markersize=2, label='c$_-$/c$_0$ (BF$_4^-$)')
+ax3b.axhline(y=1, color='gray', linestyle='--', linewidth=0.5)
+ax3b.set_ylabel('c/c$_0$ [-]')
+ax3b.set_ylim([0, 8])
+ax3b.fill_between(x_left_pm, 0, c_minus_ratio[mask_left], alpha=0.15, color='blue')
+
+# Combined legend
+lines1, labels1 = ax3.get_legend_handles_labels()
+lines2, labels2 = ax3b.get_legend_handles_labels()
+ax3.legend(lines1 + lines2, labels1 + labels2, loc='right', fontsize=8)
+
+# Bottom right: Right electrode EDL (zoomed) - Linear scale with potential
 ax4 = fig.add_subplot(2, 2, 4)
 mask_right = x_nm >= 99.5
 x_right_pm = (100 - x_nm[mask_right]) * 1000  # Distance from cathode in pm
 
-ax4.plot(x_right_pm[::-1], c_plus_ratio[mask_right][::-1], 'r-', linewidth=2, marker='o', markersize=3, label='c$_+$/c$_0$ (EMI$^+$)')
-ax4.plot(x_right_pm[::-1], c_minus_ratio[mask_right][::-1], 'b-', linewidth=2, marker='s', markersize=3, label='c$_-$/c$_0$ (BF$_4^-$)')
-ax4.axhline(y=1, color='gray', linestyle='--', linewidth=0.5, label='bulk')
+# Plot potential on left axis
+ax4.plot(x_right_pm[::-1], phi_mV[mask_right][::-1], 'k-', linewidth=2, label='φ [mV]')
 ax4.set_xlabel('Distance from cathode [pm]')
-ax4.set_ylabel('c/c$_0$ [-]')
+ax4.set_ylabel('φ [mV]')
 ax4.set_title('(d) Right EDL (Cathode, φ = -50 mV)\nEMI$^+$ accumulation, BF$_4^-$ depletion')
 ax4.set_xlim([0, 500])
-ax4.set_ylim([0, 8])
+ax4.set_ylim([-55, 0])
 ax4.grid(True, alpha=0.3)
-ax4.fill_between(x_right_pm[::-1], 0, c_plus_ratio[mask_right][::-1], alpha=0.2, color='red')
 
 # Add characteristic length markers
 ax4.axvline(x=lambda_D_pm, color='purple', linestyle=':', linewidth=2, label=f'λ$_D$ = {lambda_D_pm} pm')
 ax4.axvline(x=d_EMI_pm, color='red', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'd$_{{EMI^+}}$ = {d_EMI_pm} pm')
 ax4.axvline(x=d_BF4_pm, color='blue', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'd$_{{BF_4^-}}$ = {d_BF4_pm} pm')
-ax4.legend(loc='upper right', fontsize=9)
+
+# Second y-axis for concentration (linear scale)
+ax4b = ax4.twinx()
+ax4b.plot(x_right_pm[::-1], c_plus_ratio[mask_right][::-1], 'r--', linewidth=2, marker='o', markersize=2, label='c$_+$/c$_0$ (EMI$^+$)')
+ax4b.plot(x_right_pm[::-1], c_minus_ratio[mask_right][::-1], 'b--', linewidth=2, marker='s', markersize=2, label='c$_-$/c$_0$ (BF$_4^-$)')
+ax4b.axhline(y=1, color='gray', linestyle='--', linewidth=0.5)
+ax4b.set_ylabel('c/c$_0$ [-]')
+ax4b.set_ylim([0, 8])
+ax4b.fill_between(x_right_pm[::-1], 0, c_plus_ratio[mask_right][::-1], alpha=0.15, color='red')
+
+# Combined legend
+lines1, labels1 = ax4.get_legend_handles_labels()
+lines2, labels2 = ax4b.get_legend_handles_labels()
+ax4.legend(lines1 + lines2, labels1 + labels2, loc='right', fontsize=8)
 
 plt.suptitle('Figure 1: Dual-Electrode Model - EMI-BF$_4$ Ionic Liquid\n(φ$_L$ = +50 mV, φ$_R$ = -50 mV, c$_0$ = 1 M, λ$_D$ = 119 pm)',
              fontsize=14, y=0.98)
