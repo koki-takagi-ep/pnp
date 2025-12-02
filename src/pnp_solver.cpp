@@ -735,6 +735,326 @@ void PNPSolver1D::solve_transient_with_snapshots(double dt, double t_final,
     std::cout << "  Transient simulation with snapshots completed.\n";
 }
 
+void PNPSolver1D::solve_transient_gummel(double dt, double t_final,
+                                          const std::string& output_dir,
+                                          int snapshot_interval) {
+    /**
+     * Transient PNP solver using Gummel iteration (fully implicit)
+     *
+     * At each time step, iterate between Poisson and NP equations until convergence.
+     * This ensures proper coupling and unconditional stability.
+     *
+     * Algorithm:
+     *   For each time step n -> n+1:
+     *     1. Initialize: φ^(0) = φ^n, c^(0) = c^n
+     *     2. Gummel loop (k = 0, 1, 2, ...):
+     *        a. Solve Poisson: ∇²φ^(k+1) = -ρ(c^(k))/ε
+     *        b. Solve NP for c+: (c+ - c+^n)/dt = ∇·(D∇c+ + D*z*e/kT * c+ * ∇φ^(k+1))
+     *        c. Solve NP for c-: (c- - c-^n)/dt = ∇·(D∇c- + D*z*e/kT * c- * ∇φ^(k+1))
+     *        d. Check convergence: ||c^(k+1) - c^(k)|| < tol
+     *     3. Update: φ^(n+1) = φ^(k+1), c^(n+1) = c^(k+1)
+     */
+
+    int n_steps = static_cast<int>(t_final / dt);
+    int n = params_.N;
+    double e = PhysicalConstants::e;
+    double kT = PhysicalConstants::kB * params_.T;
+
+    const int max_gummel_iter = 200;
+    const double gummel_tol = 1e-6;
+    const double omega = 0.5;  // Under-relaxation factor for stability
+
+    std::cout << "\n========================================\n";
+    std::cout << "  Transient Solver (Gummel Iteration)\n";
+    std::cout << "========================================\n";
+    std::cout << "  Time step: " << dt * 1e9 << " ns\n";
+    std::cout << "  Total time: " << t_final * 1e9 << " ns\n";
+    std::cout << "  Number of steps: " << n_steps << "\n";
+    std::cout << "  Snapshot interval: " << snapshot_interval << " steps\n";
+    std::cout << "  Gummel tolerance: " << gummel_tol << "\n";
+
+    // Initialize with uniform bulk concentration
+    for (int i = 0; i < n; ++i) {
+        c_plus_[i] = params_.c0;
+        c_minus_[i] = params_.c0;
+    }
+
+    // Solve Poisson with initial uniform concentration to get starting potential
+    // With ρ = 0, this gives linear profile
+    {
+        std::vector<double> a_p(n, 0.0), b_p(n, 0.0), c_p(n, 0.0), rhs_p(n, 0.0);
+        b_p[0] = 1.0;
+        rhs_p[0] = params_.phi_left;
+
+        for (int i = 1; i < n - 1; ++i) {
+            double dx_plus = x_[i + 1] - x_[i];
+            double dx_minus = x_[i] - x_[i - 1];
+            double dx_avg = 0.5 * (dx_plus + dx_minus);
+
+            double rho_i = PhysicalConstants::NA * e *
+                           (params_.z_plus * c_plus_[i] + params_.z_minus * c_minus_[i]);
+
+            a_p[i] = 1.0 / (dx_minus * dx_avg);
+            c_p[i] = 1.0 / (dx_plus * dx_avg);
+            b_p[i] = -(a_p[i] + c_p[i]);
+            rhs_p[i] = -rho_i / eps_;
+        }
+
+        b_p[n - 1] = 1.0;
+        rhs_p[n - 1] = params_.phi_right;
+        phi_ = solve_tridiagonal(a_p, b_p, c_p, rhs_p);
+    }
+
+    // Time info file
+    std::ofstream time_file(output_dir + "/time_info.dat");
+    time_file << "# snapshot_index  time_ns\n";
+
+    // Store old time-step values
+    std::vector<double> c_plus_n(n), c_minus_n(n), phi_n(n);
+    // Store Gummel iteration values
+    std::vector<double> c_plus_k(n), c_minus_k(n);
+
+    int snapshot_count = 0;
+
+    // Save initial state
+    {
+        std::ostringstream ss;
+        ss << output_dir << "/snapshot_" << std::setfill('0') << std::setw(5) << snapshot_count << ".dat";
+        save_results(ss.str());
+        time_file << snapshot_count << "\t" << 0.0 << "\n";
+        snapshot_count++;
+    }
+
+    for (int step = 0; step < n_steps; ++step) {
+        // Store values at time n
+        c_plus_n = c_plus_;
+        c_minus_n = c_minus_;
+        phi_n = phi_;
+
+        // Gummel iteration
+        int gummel_iter = 0;
+        double gummel_error = 1.0;
+
+        while (gummel_iter < max_gummel_iter && gummel_error > gummel_tol) {
+            // Store current iteration values
+            c_plus_k = c_plus_;
+            c_minus_k = c_minus_;
+
+            // Step 1: Solve Poisson equation with current concentrations
+            {
+                std::vector<double> a_p(n, 0.0), b_p(n, 0.0), c_p(n, 0.0), rhs_p(n, 0.0);
+
+                b_p[0] = 1.0;
+                rhs_p[0] = params_.phi_left;
+
+                for (int i = 1; i < n - 1; ++i) {
+                    double dx_plus = x_[i + 1] - x_[i];
+                    double dx_minus = x_[i] - x_[i - 1];
+                    double dx_avg = 0.5 * (dx_plus + dx_minus);
+
+                    double rho_i = PhysicalConstants::NA * e *
+                                   (params_.z_plus * c_plus_[i] + params_.z_minus * c_minus_[i]);
+
+                    a_p[i] = 1.0 / (dx_minus * dx_avg);
+                    c_p[i] = 1.0 / (dx_plus * dx_avg);
+                    b_p[i] = -(a_p[i] + c_p[i]);
+                    rhs_p[i] = -rho_i / eps_;
+                }
+
+                b_p[n - 1] = 1.0;
+                rhs_p[n - 1] = params_.phi_right;
+                phi_ = solve_tridiagonal(a_p, b_p, c_p, rhs_p);
+            }
+
+            // Step 2: Solve Nernst-Planck for each species (implicit in time)
+            for (int species = 0; species < 2; ++species) {
+                double D = (species == 0) ? params_.D_plus : params_.D_minus;
+                int z = (species == 0) ? params_.z_plus : params_.z_minus;
+                std::vector<double>& conc = (species == 0) ? c_plus_ : c_minus_;
+                const std::vector<double>& conc_n = (species == 0) ? c_plus_n : c_minus_n;
+
+                std::vector<double> a_c(n, 0.0), b_c(n, 0.0), c_c(n, 0.0), rhs_c(n, 0.0);
+
+                // Left BC: zero flux (blocking electrode)
+                // Use one-sided discretization for flux = 0
+                double dx0 = x_[1] - x_[0];
+                double v0 = -z * e / kT * (phi_[1] - phi_[0]) / dx0;
+                double B0_p = bernoulli(v0 * dx0);
+                double B0_m = bernoulli(-v0 * dx0);
+                double alpha0 = D * dt / (dx0 * dx0);
+
+                b_c[0] = 1.0 + alpha0 * B0_m;
+                c_c[0] = -alpha0 * B0_p;
+                rhs_c[0] = conc_n[0];
+
+                // Interior points
+                for (int i = 1; i < n - 1; ++i) {
+                    double dx_plus = x_[i + 1] - x_[i];
+                    double dx_minus = x_[i] - x_[i - 1];
+                    double dx_avg = 0.5 * (dx_plus + dx_minus);
+
+                    double v_plus = -z * e / kT * (phi_[i + 1] - phi_[i]) / dx_plus;
+                    double v_minus = -z * e / kT * (phi_[i] - phi_[i - 1]) / dx_minus;
+
+                    double B_plus_p = bernoulli(v_plus * dx_plus);
+                    double B_plus_m = bernoulli(-v_plus * dx_plus);
+                    double B_minus_p = bernoulli(v_minus * dx_minus);
+                    double B_minus_m = bernoulli(-v_minus * dx_minus);
+
+                    double alpha_plus = D * dt / (dx_plus * dx_avg);
+                    double alpha_minus = D * dt / (dx_minus * dx_avg);
+
+                    a_c[i] = -alpha_minus * B_minus_p;
+                    c_c[i] = -alpha_plus * B_plus_p;
+                    b_c[i] = 1.0 + alpha_minus * B_minus_m + alpha_plus * B_plus_m;
+                    rhs_c[i] = conc_n[i];
+                }
+
+                // Right BC: Dirichlet (bulk)
+                b_c[n - 1] = 1.0;
+                rhs_c[n - 1] = params_.c0;
+
+                std::vector<double> conc_new = solve_tridiagonal(a_c, b_c, c_c, rhs_c);
+
+                // Under-relaxation and positivity enforcement
+                for (int i = 0; i < n; ++i) {
+                    conc_new[i] = std::max(conc_new[i], 1e-12 * params_.c0);
+                    conc[i] = omega * conc_new[i] + (1.0 - omega) * conc[i];
+                }
+            }
+
+            // Compute Gummel convergence error
+            gummel_error = 0.0;
+            for (int i = 0; i < n; ++i) {
+                double err_plus = std::abs(c_plus_[i] - c_plus_k[i]) / (params_.c0 + 1e-20);
+                double err_minus = std::abs(c_minus_[i] - c_minus_k[i]) / (params_.c0 + 1e-20);
+                gummel_error = std::max(gummel_error, std::max(err_plus, err_minus));
+            }
+
+            gummel_iter++;
+        }
+
+        // Save snapshot
+        if ((step + 1) % snapshot_interval == 0) {
+            std::ostringstream ss;
+            ss << output_dir << "/snapshot_" << std::setfill('0') << std::setw(5) << snapshot_count << ".dat";
+            save_results(ss.str());
+            double time_ns = (step + 1) * dt * 1e9;
+            time_file << snapshot_count << "\t" << time_ns << "\n";
+            snapshot_count++;
+        }
+
+        // Progress output
+        if (step % std::max(1, n_steps / 20) == 0 || step == n_steps - 1) {
+            double time_ns = (step + 1) * dt * 1e9;
+            double max_c_plus = *std::max_element(c_plus_.begin(), c_plus_.end());
+            double min_c_plus = *std::min_element(c_plus_.begin(), c_plus_.end());
+            std::cout << "  t = " << std::fixed << std::setprecision(2) << time_ns
+                      << " ns, Gummel iter = " << gummel_iter
+                      << ", c+/c0 range: [" << std::scientific << std::setprecision(2)
+                      << min_c_plus / params_.c0 << ", " << max_c_plus / params_.c0 << "]\n";
+        }
+    }
+
+    time_file.close();
+    std::cout << "  Total snapshots: " << snapshot_count << "\n";
+    std::cout << "  Transient (Gummel) completed.\n";
+}
+
+void PNPSolver1D::solve_transient_continuation(int n_steps,
+                                                const std::string& output_dir) {
+    /**
+     * Pseudo-transient solver using continuation method
+     *
+     * Strategy: Start from zero potential and gradually increase to target.
+     * At each step, solve steady-state PNP (which is stable).
+     * This mimics the physical process of charging an EDL.
+     *
+     * The "time" axis represents the fraction of charging completed,
+     * which is physically meaningful as the RC charging time.
+     */
+
+    int n = params_.N;
+    double phi0_target = params_.phi_left;
+
+    std::cout << "\n========================================\n";
+    std::cout << "  Transient Solver (Continuation Method)\n";
+    std::cout << "========================================\n";
+    std::cout << "  Target potential: " << phi0_target * 1e3 << " mV\n";
+    std::cout << "  Number of steps: " << n_steps << "\n";
+    std::cout << "  Output directory: " << output_dir << "\n";
+
+    // Time info file
+    std::ofstream time_file(output_dir + "/time_info.dat");
+    time_file << "# snapshot_index  time_ns  phi0_mV\n";
+
+    // Estimate RC time constant: τ_RC = λ_D * L / D
+    double tau_RC = lambda_D_ * params_.L / params_.D_plus;
+    std::cout << "  Estimated RC time: " << tau_RC * 1e9 << " ns\n";
+
+    // Initialize with uniform concentration
+    for (int i = 0; i < n; ++i) {
+        c_plus_[i] = params_.c0;
+        c_minus_[i] = params_.c0;
+        phi_[i] = 0.0;
+    }
+
+    int snapshot_count = 0;
+
+    // Save initial state (phi0 = 0)
+    params_.phi_left = 0.0;
+    {
+        std::ostringstream ss;
+        ss << output_dir << "/snapshot_" << std::setfill('0') << std::setw(5) << snapshot_count << ".dat";
+        save_results(ss.str());
+        time_file << snapshot_count << "\t" << 0.0 << "\t" << 0.0 << "\n";
+        snapshot_count++;
+    }
+
+    // Gradually increase surface potential
+    for (int step = 1; step <= n_steps; ++step) {
+        double frac = static_cast<double>(step) / n_steps;
+
+        // Exponential charging profile: V(t) = V0 * (1 - exp(-t/τ))
+        // Inverted: t/τ = -ln(1 - V/V0) = -ln(1 - frac)
+        double t_over_tau = -std::log(1.0 - frac + 1e-10);
+        double time_ns = t_over_tau * tau_RC * 1e9;
+
+        // Set current surface potential
+        params_.phi_left = phi0_target * frac;
+
+        // Update boundary condition in solution
+        phi_[0] = params_.phi_left;
+
+        // Use Boltzmann distribution as initial guess
+        update_concentrations_from_phi();
+
+        // Solve steady-state PNP with current BCs
+        // Uses Newton-Raphson which is stable
+        solve();
+
+        // Save snapshot
+        std::ostringstream ss;
+        ss << output_dir << "/snapshot_" << std::setfill('0') << std::setw(5) << snapshot_count << ".dat";
+        save_results(ss.str());
+        time_file << snapshot_count << "\t" << time_ns << "\t" << params_.phi_left * 1e3 << "\n";
+        snapshot_count++;
+
+        if (step % std::max(1, n_steps / 10) == 0) {
+            std::cout << "  Step " << step << "/" << n_steps
+                      << ", φ0 = " << params_.phi_left * 1e3 << " mV"
+                      << ", t = " << time_ns << " ns\n";
+        }
+    }
+
+    // Restore original target potential
+    params_.phi_left = phi0_target;
+
+    time_file.close();
+    std::cout << "  Total snapshots: " << snapshot_count << "\n";
+    std::cout << "  Continuation method completed.\n";
+}
+
 double PNPSolver1D::get_debye_length() const {
     return lambda_D_;
 }

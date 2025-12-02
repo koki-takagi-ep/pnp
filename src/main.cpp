@@ -30,6 +30,8 @@ void print_usage(const char* program_name) {
               << "  --animation         Save snapshots for GIF animation (transient mode)\n"
               << "  --snapshot-dir <dir> Directory for animation snapshots (default: results/snapshots)\n"
               << "  --snapshot-interval <n> Save snapshot every n steps (default: 10)\n"
+              << "  --gummel            Use Gummel iteration for transient (more stable)\n"
+              << "  --continuation <n>  Use continuation method with n steps (most stable)\n"
               << "  --help              Show this help message\n"
               << std::endl;
 }
@@ -51,6 +53,9 @@ int main(int argc, char* argv[]) {
     bool save_animation = false;  // Save snapshots for animation
     std::string snapshot_dir = "results/snapshots";  // Snapshot output directory
     int snapshot_interval = 10;   // Save every n steps
+    bool use_gummel = false;      // Use Gummel iteration for transient
+    bool use_continuation = false; // Use continuation method
+    int continuation_steps = 50;   // Number of continuation steps
 
     // Parse command line arguments
     for (int i = 1; i < argc; ++i) {
@@ -89,6 +94,13 @@ int main(int argc, char* argv[]) {
             snapshot_dir = argv[++i];
         } else if (arg == "--snapshot-interval" && i + 1 < argc) {
             snapshot_interval = std::atoi(argv[++i]);
+        } else if (arg == "--gummel") {
+            use_gummel = true;
+            run_transient = true;
+        } else if (arg == "--continuation" && i + 1 < argc) {
+            use_continuation = true;
+            continuation_steps = std::atoi(argv[++i]);
+            run_transient = true;
         }
     }
 
@@ -153,9 +165,20 @@ int main(int argc, char* argv[]) {
         double dt = dt_ns * 1e-9;           // Convert ns to s
         double t_final = t_final_us * 1e-6; // Convert µs to s
 
-        if (save_animation) {
-            // Create snapshot directory
-            std::filesystem::create_directories(snapshot_dir);
+        // Create snapshot directory if needed
+        std::filesystem::create_directories(snapshot_dir);
+
+        if (use_continuation) {
+            // Use continuation method (most stable)
+            solver.solve_transient_continuation(continuation_steps, snapshot_dir);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else if (use_gummel) {
+            // Use Gummel iteration (more stable)
+            solver.solve_transient_gummel(dt, t_final, snapshot_dir, snapshot_interval);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else if (save_animation) {
             solver.solve_transient_with_snapshots(dt, t_final, snapshot_dir, snapshot_interval);
             std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
             std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";

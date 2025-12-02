@@ -115,6 +115,11 @@ public:
     void solve_transient_with_snapshots(double dt, double t_final,
                                          const std::string& output_dir,
                                          int snapshot_interval = 10);
+    void solve_transient_gummel(double dt, double t_final,
+                                const std::string& output_dir,
+                                int snapshot_interval = 10);
+    void solve_transient_continuation(int n_steps,
+                                      const std::string& output_dir);
 
     const std::vector<double>& get_x() const { return x_; }
     const std::vector<double>& get_phi() const { return phi_; }

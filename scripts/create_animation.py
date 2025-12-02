@@ -52,9 +52,10 @@ def load_time_info(snapshot_dir):
     """Load time information from time_info.dat."""
     time_file = Path(snapshot_dir) / 'time_info.dat'
     if not time_file.exists():
-        return None
+        return None, None
 
     times = {}
+    voltages = {}
     with open(time_file, 'r') as f:
         for line in f:
             if line.startswith('#'):
@@ -64,27 +65,33 @@ def load_time_info(snapshot_dir):
                 idx = int(parts[0])
                 time_ns = float(parts[1])
                 times[idx] = time_ns
-    return times
+                if len(parts) >= 3:
+                    voltages[idx] = float(parts[2])
+    return times, voltages if voltages else None
 
 
-def create_frame(data, time_ns, frame_idx, output_path, x_max=50, x_max_conc=20):
+def create_frame(data, time_ns, frame_idx, output_path, x_max=50, x_max_conc=20,
+                 phi0_mV=None, phi_max_fixed=None):
     """Create a single frame for the animation."""
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
     # (a) Electric potential - full domain view
     ax = axes[0]
-    ax.plot(data['x_nm'], data['phi_mV'], 'b-', linewidth=2, label='PNP (transient)')
-    ax.plot(data['x_nm'], data['phi_gc_mV'], 'r--', linewidth=1.5, alpha=0.7, label='G-C (steady)')
+    ax.plot(data['x_nm'], data['phi_mV'], 'b-', linewidth=2, label='PNP (numerical)')
+    ax.plot(data['x_nm'], data['phi_gc_mV'], 'r--', linewidth=1.5, alpha=0.7, label='Gouy-Chapman')
     ax.set_xlabel(r'$x$ [nm]', fontsize=11, fontweight='bold')
     ax.set_ylabel(r'$\phi$ [mV]', fontsize=11, fontweight='bold')
     ax.set_title('Electric Potential', fontsize=11, fontweight='bold')
     ax.legend(loc='upper right', fontsize=9)
     ax.set_xlim([0, x_max])
-    phi_max = max(data['phi_mV'].max(), data['phi_gc_mV'].max())
-    ax.set_ylim([0, phi_max * 1.1])
+    if phi_max_fixed is not None:
+        ax.set_ylim([0, phi_max_fixed * 1.1])
+    else:
+        phi_max = max(data['phi_mV'].max(), data['phi_gc_mV'].max(), 1)
+        ax.set_ylim([0, phi_max * 1.1])
     setup_axis_style(ax)
 
-    # (b) Ion concentrations - zoom in to EDL region (linear scale)
+    # (b) Ion concentrations - zoom in to EDL region (log scale)
     ax = axes[1]
     ax.plot(data['x_nm'], data['c_plus_norm'], 'r-', linewidth=2, label=r'$c_+/c_0$ (cation)')
     ax.plot(data['x_nm'], data['c_minus_norm'], 'b-', linewidth=2, label=r'$c_-/c_0$ (anion)')
@@ -93,16 +100,17 @@ def create_frame(data, time_ns, frame_idx, output_path, x_max=50, x_max_conc=20)
     ax.set_ylabel(r'$c / c_0$', fontsize=11, fontweight='bold')
     ax.set_title('Ion Concentrations (EDL region)', fontsize=11, fontweight='bold')
     ax.legend(loc='upper right', fontsize=9)
-    ax.set_xlim([0, x_max_conc])  # Zoom in for concentration
-    # Use linear scale to better show small changes
-    c_min = min(data['c_plus_norm'].min(), data['c_minus_norm'].min())
-    c_max = max(data['c_plus_norm'].max(), data['c_minus_norm'].max())
-    margin = (c_max - c_min) * 0.1 + 0.05
-    ax.set_ylim([min(0.9, c_min - margin), max(1.1, c_max + margin)])
+    ax.set_xlim([0, x_max_conc])
+    ax.set_yscale('log')
+    ax.set_ylim([0.01, 100])
     setup_axis_style(ax)
 
-    # Add time annotation
-    fig.suptitle(f'Time: {time_ns:.1f} ns', fontsize=14, fontweight='bold', y=0.98)
+    # Add title with time and voltage
+    if phi0_mV is not None:
+        fig.suptitle(f'Surface Potential: {phi0_mV:.1f} mV  (t = {time_ns:.0f} ns)',
+                     fontsize=14, fontweight='bold', y=0.98)
+    else:
+        fig.suptitle(f'Time: {time_ns:.1f} ns', fontsize=14, fontweight='bold', y=0.98)
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig(output_path, dpi=100, bbox_inches='tight')
@@ -179,10 +187,15 @@ def main():
         print(f"Subsampled to {len(snapshot_files)} frames")
 
     # Load time information
-    time_info = load_time_info(snapshot_dir)
+    time_info, voltage_info = load_time_info(snapshot_dir)
     if time_info is None:
         print("Warning: time_info.dat not found, using frame index as time")
         time_info = {i: i * 1.0 for i in range(len(snapshot_files))}
+
+    # Determine max voltage for consistent y-axis
+    phi_max_fixed = None
+    if voltage_info:
+        phi_max_fixed = max(voltage_info.values())
 
     # Create temporary directory for frames
     frame_dir = snapshot_dir / 'frames'
@@ -200,9 +213,11 @@ def main():
         # Extract snapshot index from filename
         snapshot_idx = int(Path(snapshot_file).stem.split('_')[-1])
         time_ns = time_info.get(snapshot_idx, snapshot_idx * 1.0)
+        phi0_mV = voltage_info.get(snapshot_idx) if voltage_info else None
 
         frame_path = frame_dir / f'frame_{idx:05d}.png'
-        create_frame(data, time_ns, idx, frame_path, x_max=x_max)
+        create_frame(data, time_ns, idx, frame_path, x_max=x_max,
+                     phi0_mV=phi0_mV, phi_max_fixed=phi_max_fixed)
         frame_files.append(str(frame_path))
 
         if (idx + 1) % 10 == 0 or idx == len(snapshot_files) - 1:
