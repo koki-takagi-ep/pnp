@@ -35,6 +35,9 @@ PNPSolver1D::PNPSolver1D(const PNPParameters& params)
     double a3 = params_.a * params_.a * params_.a;
     nu_ = 2.0 * a3 * params_.c0 * PhysicalConstants::NA;
 
+    // Initialize bulk potential (will be computed for closed systems)
+    phi_bulk_ = 0.0;
+
     std::cout << "========================================\n";
     std::cout << "  1D PNP Solver Initialization\n";
     std::cout << "========================================\n";
@@ -451,9 +454,26 @@ bool PNPSolver1D::solve() {
 
             if (charge_error < 1e-8) {
                 std::cout << "  Charge neutrality converged after " << outer_iter + 1 << " outer iterations.\n";
-                std::cout << "  Final bulk potential (center): " << phi_bulk_center * 1e3 << " mV\n";
-                std::cout << "  Effective electrodes: left = " << phi_[0] * 1e3
-                          << " mV, right = " << phi_[n-1] * 1e3 << " mV\n";
+
+                // Store the bulk potential (relative to user's reference frame)
+                phi_bulk_ = -phi_offset;
+
+                // Shift phi array back to user-specified reference frame
+                // Internal calculation was done in bulk-centered frame: phi_internal = phi_user - phi_bulk
+                // Now convert back: phi_user = phi_internal + phi_bulk
+                for (int i = 0; i < n; ++i) {
+                    phi_[i] -= phi_offset;  // Equivalent to phi_[i] += phi_bulk
+                }
+
+                std::cout << "\n  === Self-consistent solution ===" << "\n";
+                std::cout << "  Boundary conditions (user-specified):\n";
+                std::cout << "    Left electrode:  " << phi_[0] * 1e3 << " mV\n";
+                std::cout << "    Right electrode: " << phi_[n-1] * 1e3 << " mV\n";
+                std::cout << "  Bulk potential (self-consistently determined):\n";
+                std::cout << "    phi_bulk = " << phi_bulk_ * 1e3 << " mV\n";
+                std::cout << "  EDL driving potentials (relative to bulk):\n";
+                std::cout << "    Left EDL:  " << (phi_[0] - phi_bulk_) * 1e3 << " mV\n";
+                std::cout << "    Right EDL: " << (phi_[n-1] - phi_bulk_) * 1e3 << " mV\n";
                 break;
             }
         } else {
@@ -2619,7 +2639,9 @@ void PNPSolver1D::save_results(const std::string& filename) const {
 
     file << "# 1D PNP Solver Results\n";
     file << "# Debye length: " << lambda_D_ * 1e9 << " nm\n";
-    file << "# Surface potential: " << params_.phi_left * 1000.0 << " mV\n";
+    file << "# Left electrode potential: " << params_.phi_left * 1000.0 << " mV\n";
+    file << "# Right electrode potential: " << params_.phi_right * 1000.0 << " mV\n";
+    file << "# Bulk potential: " << phi_bulk_ * 1000.0 << " mV\n";
     file << "# Bulk concentration: " << params_.c0 << " mol/m^3\n";
     file << "# Thermal voltage: " << phi_T_ * 1000.0 << " mV\n";
     file << "# Grid: non-uniform with stretching factor " << params_.grid_stretch << "\n";

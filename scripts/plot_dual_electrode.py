@@ -29,6 +29,22 @@ dx_nm = data[:, 10]        # dx [nm] (grid spacing)
 phi_left_mV = phi_mV[0]    # Anode (left electrode) potential
 phi_right_mV = phi_mV[-1]  # Cathode (right electrode) potential
 
+# Try to extract bulk potential from header comments
+phi_bulk_mV = 0.0
+try:
+    with open('results/dual_electrode.dat', 'r') as f:
+        for line in f:
+            if line.startswith('#') and 'Bulk potential:' in line:
+                # Parse "# Bulk potential: 50 mV"
+                phi_bulk_mV = float(line.split(':')[1].replace('mV', '').strip())
+                break
+except:
+    # Estimate from data
+    phi_bulk_mV = phi_mV[len(phi_mV)//2]
+
+print(f"Electrode potentials: Left={phi_left_mV:.1f} mV, Right={phi_right_mV:.1f} mV")
+print(f"Bulk potential: {phi_bulk_mV:.1f} mV")
+
 # ============================================================================
 # Figure 1: Capacitor Structure Overview (2x2 layout)
 # ============================================================================
@@ -37,13 +53,17 @@ fig = plt.figure(figsize=(14, 10))
 # Top left: Full potential profile
 ax1 = fig.add_subplot(2, 2, 1)
 ax1.plot(x_nm, phi_mV, 'b-', linewidth=2)
-ax1.axhline(y=0, color='gray', linestyle='--', linewidth=0.5)
+ax1.axhline(y=phi_bulk_mV, color='gray', linestyle='--', linewidth=1.5, label=f'Bulk ({phi_bulk_mV:.0f} mV)')
 ax1.set_xlabel('x [nm]')
 ax1.set_ylabel('φ [mV]')
 ax1.set_title('(a) Electric Potential Profile (Full Domain)')
 ax1.set_xlim([0, 100])
-ax1.set_ylim([-60, 60])
+# Dynamic y-limits based on actual data
+phi_min, phi_max = min(phi_mV.min(), phi_right_mV), max(phi_mV.max(), phi_left_mV)
+phi_margin = (phi_max - phi_min) * 0.1
+ax1.set_ylim([phi_min - phi_margin, phi_max + phi_margin])
 ax1.grid(True, alpha=0.3)
+ax1.legend(loc='best')
 ax1.annotate(f'Anode\n{phi_left_mV:+.0f} mV', xy=(0, phi_left_mV), xytext=(5, phi_left_mV-10), fontsize=10, color='red')
 ax1.annotate(f'Cathode\n{phi_right_mV:+.0f} mV', xy=(100, phi_right_mV), xytext=(85, phi_right_mV+10), fontsize=10, color='blue')
 
@@ -67,11 +87,14 @@ x_left_pm = x_nm[mask_left] * 1000  # pm
 
 # Plot potential on left axis
 ax3.plot(x_left_pm, phi_mV[mask_left], 'k-', linewidth=2, label='φ [mV]')
+ax3.axhline(y=phi_bulk_mV, color='gray', linestyle='--', linewidth=1, alpha=0.5)
 ax3.set_xlabel('Distance from anode [pm]')
 ax3.set_ylabel('φ [mV]')
 ax3.set_title(f'(c) Left EDL (Anode, φ = {phi_left_mV:+.0f} mV)\nBF$_4^-$ accumulation, EMI$^+$ depletion')
 ax3.set_xlim([0, 500])
-ax3.set_ylim([min(0, phi_left_mV*0.9), max(phi_left_mV*1.1, 10)])
+# Dynamic y-limits: from bulk potential to electrode potential with margin
+left_edl_ylim = [min(phi_bulk_mV, phi_left_mV) - 5, max(phi_bulk_mV, phi_left_mV) + 5]
+ax3.set_ylim(left_edl_ylim)
 ax3.grid(True, alpha=0.3)
 
 # Add characteristic length markers
@@ -100,11 +123,14 @@ x_right_pm = (100 - x_nm[mask_right]) * 1000  # Distance from cathode in pm
 
 # Plot potential on left axis
 ax4.plot(x_right_pm[::-1], phi_mV[mask_right][::-1], 'k-', linewidth=2, label='φ [mV]')
+ax4.axhline(y=phi_bulk_mV, color='gray', linestyle='--', linewidth=1, alpha=0.5)
 ax4.set_xlabel('Distance from cathode [pm]')
 ax4.set_ylabel('φ [mV]')
 ax4.set_title(f'(d) Right EDL (Cathode, φ = {phi_right_mV:+.0f} mV)\nEMI$^+$ accumulation, BF$_4^-$ depletion')
 ax4.set_xlim([0, 500])
-ax4.set_ylim([min(phi_right_mV*1.1, -10), max(0, phi_right_mV*0.9)])
+# Dynamic y-limits: from electrode potential to bulk potential with margin
+right_edl_ylim = [min(phi_bulk_mV, phi_right_mV) - 5, max(phi_bulk_mV, phi_right_mV) + 5]
+ax4.set_ylim(right_edl_ylim)
 ax4.grid(True, alpha=0.3)
 
 # Add characteristic length markers
@@ -126,7 +152,7 @@ lines1, labels1 = ax4.get_legend_handles_labels()
 lines2, labels2 = ax4b.get_legend_handles_labels()
 ax4.legend(lines1 + lines2, labels1 + labels2, loc='right', fontsize=8)
 
-plt.suptitle(f'Figure 1: Dual-Electrode Model - EMI-BF$_4$ Ionic Liquid\n(φ$_L$ = {phi_left_mV:+.0f} mV, φ$_R$ = {phi_right_mV:+.0f} mV, c$_0$ = 1 M, λ$_D$ = 119 pm)',
+plt.suptitle(f'Figure 1: Dual-Electrode Model - EMI-BF$_4$ Ionic Liquid\n(φ$_L$ = {phi_left_mV:+.0f} mV, φ$_R$ = {phi_right_mV:+.0f} mV, φ$_{{bulk}}$ = {phi_bulk_mV:.0f} mV, c$_0$ = 1 M, λ$_D$ = 119 pm)',
              fontsize=14, y=0.98)
 plt.tight_layout()
 plt.savefig('results/dual_electrode.png', dpi=150, bbox_inches='tight')

@@ -197,6 +197,11 @@ public:
     double get_packing_fraction() const { return nu_; }
 
     /**
+     * @brief Get self-consistently determined bulk potential (for closed system)
+     */
+    double get_bulk_potential() const { return phi_bulk_; }
+
+    /**
      * @brief Get model name as string
      */
     std::string get_model_name() const;
@@ -220,6 +225,7 @@ private:
     double lambda_D_;  // Debye length [m]
     double phi_T_;     // Thermal voltage [V]
     double nu_;        // Packing fraction for Bikerman model
+    double phi_bulk_;  // Self-consistently determined bulk potential [V] (for closed system)
 
     void initialize();
     void create_nonuniform_grid();
