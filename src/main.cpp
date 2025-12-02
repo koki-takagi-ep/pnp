@@ -32,6 +32,9 @@ void print_usage(const char* program_name) {
               << "  --snapshot-interval <n> Save snapshot every n steps (default: 10)\n"
               << "  --gummel            Use Gummel iteration for transient (more stable)\n"
               << "  --continuation <n>  Use continuation method with n steps (most stable)\n"
+              << "  --newton            Use fully implicit Newton method for transient\n"
+              << "  --slotboom          Use Slotboom transformation for transient (stable)\n"
+              << "  --shenxu            Use Shen-Xu positivity preserving scheme (most stable)\n"
               << "  --help              Show this help message\n"
               << std::endl;
 }
@@ -56,6 +59,9 @@ int main(int argc, char* argv[]) {
     bool use_gummel = false;      // Use Gummel iteration for transient
     bool use_continuation = false; // Use continuation method
     int continuation_steps = 50;   // Number of continuation steps
+    bool use_newton = false;       // Use fully implicit Newton method
+    bool use_slotboom = false;     // Use Slotboom transformation method
+    bool use_shenxu = false;       // Use Shen-Xu positivity preserving scheme
 
     // Parse command line arguments
     for (int i = 1; i < argc; ++i) {
@@ -100,6 +106,15 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--continuation" && i + 1 < argc) {
             use_continuation = true;
             continuation_steps = std::atoi(argv[++i]);
+            run_transient = true;
+        } else if (arg == "--newton") {
+            use_newton = true;
+            run_transient = true;
+        } else if (arg == "--slotboom") {
+            use_slotboom = true;
+            run_transient = true;
+        } else if (arg == "--shenxu") {
+            use_shenxu = true;
             run_transient = true;
         }
     }
@@ -168,7 +183,22 @@ int main(int argc, char* argv[]) {
         // Create snapshot directory if needed
         std::filesystem::create_directories(snapshot_dir);
 
-        if (use_continuation) {
+        if (use_shenxu) {
+            // Use Shen-Xu positivity preserving scheme (unconditionally stable)
+            solver.solve_transient_shenxu(dt, t_final, snapshot_dir, snapshot_interval);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else if (use_slotboom) {
+            // Use Slotboom transformation (most stable for true transient)
+            solver.solve_transient_slotboom(dt, t_final, snapshot_dir, snapshot_interval);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else if (use_newton) {
+            // Use fully implicit Newton method
+            solver.solve_transient_newton(dt, t_final, snapshot_dir, snapshot_interval);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else if (use_continuation) {
             // Use continuation method (most stable)
             solver.solve_transient_continuation(continuation_steps, snapshot_dir);
             std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
