@@ -593,14 +593,20 @@ void PNPSolver1D::solve_transient(double dt, double t_final) {
             std::vector<double> a(n, 0.0), b(n, 0.0), c_vec(n, 0.0), rhs(n, 0.0);
 
             // Left boundary (x=0): Zero flux (blocking electrode)
+            // SG flux: J_{1/2} = D/dx [B(η) c_1 - B(-η) c_0]
+            // where η = (ze/kT)(φ_1 - φ_0) = z * Δψ (dimensionless potential difference)
             double dx0 = x_[1] - x_[0];
-            double v0 = -z * e / kT * (phi_[1] - phi_[0]) / dx0;
-            double B0_p = bernoulli(v0 * dx0);
-            double B0_m = bernoulli(-v0 * dx0);
+            double eta0 = z * e / kT * (phi_[1] - phi_[0]);  // Correct sign: η = ze Δφ / kT
+            double B0_p = bernoulli(eta0);    // B(η)
+            double B0_m = bernoulli(-eta0);   // B(-η)
 
             double alpha0 = D * dt / (dx0 * dx0);
-            b[0] = 1.0 + alpha0 * B0_m;
-            c_vec[0] = -alpha0 * B0_p;
+            // Zero flux at left wall: only outward flux J_{1/2} matters
+            // SG flux: J_{1/2} = D/dx [B(-η) c_1 - B(η) c_0]
+            // dc_0/dt = -J_{1/2}/dx0
+            // Implicit: c_0^{n+1}(1 - α B(η)) + α B(-η) c_1^{n+1} = c_0^n
+            b[0] = 1.0 - alpha0 * B0_p;   // 1 - α B(η)
+            c_vec[0] = alpha0 * B0_m;     // α B(-η)
             rhs[0] = conc_old[0];
 
             for (int i = 1; i < n - 1; ++i) {
@@ -608,21 +614,25 @@ void PNPSolver1D::solve_transient(double dt, double t_final) {
                 double dx_minus = x_[i] - x_[i - 1];
                 double dx_avg = 0.5 * (dx_plus + dx_minus);
 
-                // Electric field and drift velocity
-                double v_plus = -z * e / kT * (phi_[i + 1] - phi_[i]) / dx_plus;
-                double v_minus = -z * e / kT * (phi_[i] - phi_[i - 1]) / dx_minus;
+                // Dimensionless potential differences: η = ze Δφ / kT
+                double eta_plus = z * e / kT * (phi_[i + 1] - phi_[i]);
+                double eta_minus = z * e / kT * (phi_[i] - phi_[i - 1]);
 
-                double B_plus_p = bernoulli(v_plus * dx_plus);
-                double B_plus_m = bernoulli(-v_plus * dx_plus);
-                double B_minus_p = bernoulli(v_minus * dx_minus);
-                double B_minus_m = bernoulli(-v_minus * dx_minus);
+                double B_plus_p = bernoulli(eta_plus);    // B(η_plus)
+                double B_plus_m = bernoulli(-eta_plus);   // B(-η_plus)
+                double B_minus_p = bernoulli(eta_minus);  // B(η_minus)
+                double B_minus_m = bernoulli(-eta_minus); // B(-η_minus)
 
                 double alpha_plus = D * dt / (dx_plus * dx_avg);
                 double alpha_minus = D * dt / (dx_minus * dx_avg);
 
-                a[i] = -alpha_minus * B_minus_p;
-                c_vec[i] = -alpha_plus * B_plus_p;
-                b[i] = 1.0 + alpha_minus * B_minus_m + alpha_plus * B_plus_m;
+                // SG coefficients for implicit scheme:
+                // SG flux: J_{i+1/2} = D/dx [B(-η) c_{i+1} - B(η) c_i]
+                // Conservation: dc_i/dt = -(J_{i+1/2} - J_{i-1/2})/dx_avg
+                // After implicit discretization: a*c_{i-1} + b*c_i + c*c_{i+1} = c_i^n
+                a[i] = alpha_minus * B_minus_p;           // α_m B(η_m) for c_{i-1}
+                c_vec[i] = alpha_plus * B_plus_m;         // α_p B(-η_p) for c_{i+1}
+                b[i] = 1.0 - alpha_plus * B_plus_p - alpha_minus * B_minus_m;  // 1 - α_p B(η_p) - α_m B(-η_m)
                 rhs[i] = conc_old[i];
             }
 
@@ -809,16 +819,15 @@ void PNPSolver1D::solve_transient_with_snapshots(double dt, double t_final,
             // Use ghost point approach: flux at i=0.5 is zero
             // This means c[0] adjusts to maintain zero flux
             double dx0 = x_[1] - x_[0];
-            double v0 = -z * e / kT * (phi_[1] - phi_[0]) / dx0;  // drift velocity / D
-            double B0_p = bernoulli(v0 * dx0);
-            double B0_m = bernoulli(-v0 * dx0);
+            double eta0 = z * e / kT * (phi_[1] - phi_[0]);  // Correct sign: η = ze Δφ / kT
+            double B0_p = bernoulli(eta0);    // B(η)
+            double B0_m = bernoulli(-eta0);   // B(-η)
 
-            // Zero flux BC: J_{0.5} = 0 => B(v)*c[1] - B(-v)*c[0] = 0
-            // For time stepping: (c - c_old)/dt = D/dx * (flux_in - flux_out)
-            // At i=0: flux_in = 0 (wall), flux_out = J_{0.5}
+            // Zero flux BC: J_{0.5} = 0 => B(-η)*c[1] - B(η)*c[0] = 0
+            // Implicit: c_0^{n+1}(1 - α B(η)) + α B(-η) c_1^{n+1} = c_0^n
             double alpha0 = D * dt / (dx0 * dx0);
-            b[0] = 1.0 + alpha0 * B0_m;
-            c_vec[0] = -alpha0 * B0_p;
+            b[0] = 1.0 - alpha0 * B0_p;   // 1 - α B(η)
+            c_vec[0] = alpha0 * B0_m;     // α B(-η)
             rhs[0] = conc_old[0];
 
             for (int i = 1; i < n - 1; ++i) {
@@ -826,22 +835,23 @@ void PNPSolver1D::solve_transient_with_snapshots(double dt, double t_final,
                 double dx_minus = x_[i] - x_[i - 1];
                 double dx_avg = 0.5 * (dx_plus + dx_minus);
 
-                // Electric field and drift velocity
-                double v_plus = -z * e / kT * (phi_[i + 1] - phi_[i]) / dx_plus;
-                double v_minus = -z * e / kT * (phi_[i] - phi_[i - 1]) / dx_minus;
+                // Dimensionless potential differences: η = ze Δφ / kT
+                double eta_plus = z * e / kT * (phi_[i + 1] - phi_[i]);
+                double eta_minus = z * e / kT * (phi_[i] - phi_[i - 1]);
 
-                double B_plus_p = bernoulli(v_plus * dx_plus);
-                double B_plus_m = bernoulli(-v_plus * dx_plus);
-                double B_minus_p = bernoulli(v_minus * dx_minus);
-                double B_minus_m = bernoulli(-v_minus * dx_minus);
+                double B_plus_p = bernoulli(eta_plus);    // B(η_plus)
+                double B_plus_m = bernoulli(-eta_plus);   // B(-η_plus)
+                double B_minus_p = bernoulli(eta_minus);  // B(η_minus)
+                double B_minus_m = bernoulli(-eta_minus); // B(-η_minus)
 
-                // Flux: J_{i+1/2} = D/dx * [B(v)*c_{i+1} - B(-v)*c_i]
+                // Flux: J_{i+1/2} = D/dx * [B(-η)*c_{i+1} - B(η)*c_i]
                 double alpha_plus = D * dt / (dx_plus * dx_avg);
                 double alpha_minus = D * dt / (dx_minus * dx_avg);
 
-                a[i] = -alpha_minus * B_minus_p;
-                c_vec[i] = -alpha_plus * B_plus_p;
-                b[i] = 1.0 + alpha_minus * B_minus_m + alpha_plus * B_plus_m;
+                // Correct SG coefficients
+                a[i] = alpha_minus * B_minus_p;           // α_m B(η_m) for c_{i-1}
+                c_vec[i] = alpha_plus * B_plus_m;         // α_p B(-η_p) for c_{i+1}
+                b[i] = 1.0 - alpha_plus * B_plus_p - alpha_minus * B_minus_m;  // 1 - α_p B(η_p) - α_m B(-η_m)
                 rhs[i] = conc_old[i];
             }
 
@@ -1044,15 +1054,16 @@ void PNPSolver1D::solve_transient_gummel(double dt, double t_final,
                 std::vector<double> a_c(n, 0.0), b_c(n, 0.0), c_c(n, 0.0), rhs_c(n, 0.0);
 
                 // Left BC: zero flux (blocking electrode)
-                // Use one-sided discretization for flux = 0
+                // SG flux: J_{1/2} = D/dx [B(η) c_1 - B(-η) c_0]
+                // where η = (ze/kT)(φ_1 - φ_0) (dimensionless potential difference)
                 double dx0 = x_[1] - x_[0];
-                double v0 = -z * e / kT * (phi_[1] - phi_[0]) / dx0;
-                double B0_p = bernoulli(v0 * dx0);
-                double B0_m = bernoulli(-v0 * dx0);
+                double eta0 = z * e / kT * (phi_[1] - phi_[0]);  // Correct sign: η = ze Δφ / kT
+                double B0_p = bernoulli(eta0);    // B(η)
+                double B0_m = bernoulli(-eta0);   // B(-η)
                 double alpha0 = D * dt / (dx0 * dx0);
 
-                b_c[0] = 1.0 + alpha0 * B0_m;
-                c_c[0] = -alpha0 * B0_p;
+                b_c[0] = 1.0 - alpha0 * B0_p;   // 1 - α B(η)
+                c_c[0] = alpha0 * B0_m;         // α B(-η)
                 rhs_c[0] = conc_n[0];
 
                 // Interior points
@@ -1061,34 +1072,41 @@ void PNPSolver1D::solve_transient_gummel(double dt, double t_final,
                     double dx_minus = x_[i] - x_[i - 1];
                     double dx_avg = 0.5 * (dx_plus + dx_minus);
 
-                    double v_plus = -z * e / kT * (phi_[i + 1] - phi_[i]) / dx_plus;
-                    double v_minus = -z * e / kT * (phi_[i] - phi_[i - 1]) / dx_minus;
+                    // Dimensionless potential differences: η = ze Δφ / kT
+                    double eta_plus = z * e / kT * (phi_[i + 1] - phi_[i]);
+                    double eta_minus = z * e / kT * (phi_[i] - phi_[i - 1]);
 
-                    double B_plus_p = bernoulli(v_plus * dx_plus);
-                    double B_plus_m = bernoulli(-v_plus * dx_plus);
-                    double B_minus_p = bernoulli(v_minus * dx_minus);
-                    double B_minus_m = bernoulli(-v_minus * dx_minus);
+                    double B_plus_p = bernoulli(eta_plus);    // B(η_plus)
+                    double B_plus_m = bernoulli(-eta_plus);   // B(-η_plus)
+                    double B_minus_p = bernoulli(eta_minus);  // B(η_minus)
+                    double B_minus_m = bernoulli(-eta_minus); // B(-η_minus)
 
                     double alpha_plus = D * dt / (dx_plus * dx_avg);
                     double alpha_minus = D * dt / (dx_minus * dx_avg);
 
-                    a_c[i] = -alpha_minus * B_minus_p;
-                    c_c[i] = -alpha_plus * B_plus_p;
-                    b_c[i] = 1.0 + alpha_minus * B_minus_m + alpha_plus * B_plus_m;
+                    // Correct SG coefficients
+                    a_c[i] = alpha_minus * B_minus_p;           // α_m B(η_m) for c_{i-1}
+                    c_c[i] = alpha_plus * B_plus_m;             // α_p B(-η_p) for c_{i+1}
+                    b_c[i] = 1.0 - alpha_plus * B_plus_p - alpha_minus * B_minus_m;  // 1 - α_p B(η_p) - α_m B(-η_m)
                     rhs_c[i] = conc_n[i];
                 }
 
                 // Right BC: depends on closed_system flag
                 if (params_.closed_system) {
                     // Zero-flux BC (blocking electrode)
+                    // J_{n-1/2} = D/dx [B(η) c_{n-1} - B(-η) c_{n-2}] = 0 from outside
+                    // For the last interior point, we need flux balance
                     double dx_last = x_[n - 1] - x_[n - 2];
-                    double v_last = -z * e / kT * (phi_[n - 1] - phi_[n - 2]) / dx_last;
-                    double B_last_p = bernoulli(v_last * dx_last);
-                    double B_last_m = bernoulli(-v_last * dx_last);
+                    double eta_last = z * e / kT * (phi_[n - 1] - phi_[n - 2]);  // Correct sign
+                    double B_last_p = bernoulli(eta_last);
+                    double B_last_m = bernoulli(-eta_last);
                     double alpha_last = D * dt / (dx_last * dx_last);
 
-                    a_c[n - 1] = -alpha_last * B_last_p;
-                    b_c[n - 1] = 1.0 + alpha_last * B_last_m;
+                    // Zero flux at right: only flux from left side (J_{n-3/2})
+                    // Using J = D/dx [B(-η) c_right - B(η) c_left]
+                    // Implicit: α B(η) c_{n-2}^{n+1} + (1 - α B(-η)) c_{n-1}^{n+1} = c_{n-1}^n
+                    a_c[n - 1] = alpha_last * B_last_p;   // α B(η)
+                    b_c[n - 1] = 1.0 - alpha_last * B_last_m;  // 1 - α B(-η)
                     c_c[n - 1] = 0.0;
                     rhs_c[n - 1] = conc_n[n - 1];
                 } else {
