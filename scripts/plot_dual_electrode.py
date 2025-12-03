@@ -79,10 +79,10 @@ setup_axis_style(ax1)
 
 # (b) Full concentration profile
 ax2 = axes[0, 1]
-ax2.semilogy(x_nm, c_plus_ratio, 'r-', linewidth=1, label=r'$c_+/c_0$ (cation)')
-ax2.semilogy(x_nm, c_minus_ratio, 'b-', linewidth=1, label=r'$c_-/c_0$ (anion)')
+ax2.semilogy(x_nm, c_plus_ratio, 'r-', linewidth=1, label=r'$n_+/n_0$ (cation)')
+ax2.semilogy(x_nm, c_minus_ratio, 'b-', linewidth=1, label=r'$n_-/n_0$ (anion)')
 ax2.axhline(y=1, color='gray', linestyle='--', linewidth=0.5)
-set_labels(ax2, r'$x$ (nm)', r'$c/c_0$')
+set_labels(ax2, r'$x$ (nm)', r'$n/n_0$')
 ax2.set_title('(b) Ion Concentrations', fontsize=10, fontweight='bold')
 ax2.set_xlim([0, L_nm])
 ax2.set_ylim([1e-1, 1e1])
@@ -106,9 +106,9 @@ ax3.axvline(x=lambda_D_pm, color='purple', linestyle=':', linewidth=1, label=f'$
 setup_axis_style(ax3)
 
 ax3b = ax3.twinx()
-ax3b.plot(x_left_pm, c_plus_ratio[mask_left], 'r--', linewidth=1, marker='o', markersize=2, label=r'$c_+/c_0$')
-ax3b.plot(x_left_pm, c_minus_ratio[mask_left], 'b--', linewidth=1, marker='s', markersize=2, label=r'$c_-/c_0$')
-ax3b.set_ylabel(r'$c/c_0$', fontsize=10, fontweight='bold')
+ax3b.plot(x_left_pm, c_plus_ratio[mask_left], 'r--', linewidth=1, marker='o', markersize=2, label=r'$n_+/n_0$')
+ax3b.plot(x_left_pm, c_minus_ratio[mask_left], 'b--', linewidth=1, marker='s', markersize=2, label=r'$n_-/n_0$')
+ax3b.set_ylabel(r'$n/n_0$', fontsize=10, fontweight='bold')
 ax3b.set_ylim([0, 8])
 ax3b.fill_between(x_left_pm, 0, c_minus_ratio[mask_left], alpha=0.15, color='blue')
 
@@ -133,9 +133,9 @@ ax4.axvline(x=lambda_D_pm, color='purple', linestyle=':', linewidth=1, label=f'$
 setup_axis_style(ax4)
 
 ax4b = ax4.twinx()
-ax4b.plot(x_right_pm[::-1], c_plus_ratio[mask_right][::-1], 'r--', linewidth=1, marker='o', markersize=2, label=r'$c_+/c_0$')
-ax4b.plot(x_right_pm[::-1], c_minus_ratio[mask_right][::-1], 'b--', linewidth=1, marker='s', markersize=2, label=r'$c_-/c_0$')
-ax4b.set_ylabel(r'$c/c_0$', fontsize=10, fontweight='bold')
+ax4b.plot(x_right_pm[::-1], c_plus_ratio[mask_right][::-1], 'r--', linewidth=1, marker='o', markersize=2, label=r'$n_+/n_0$')
+ax4b.plot(x_right_pm[::-1], c_minus_ratio[mask_right][::-1], 'b--', linewidth=1, marker='s', markersize=2, label=r'$n_-/n_0$')
+ax4b.set_ylabel(r'$n/n_0$', fontsize=10, fontweight='bold')
 ax4b.set_ylim([0, 8])
 ax4b.fill_between(x_right_pm[::-1], 0, c_plus_ratio[mask_right][::-1], alpha=0.15, color='red')
 
@@ -159,10 +159,10 @@ ax1 = axes[0]
 mask_left = x_nm <= 0.5
 x_left_pm = x_nm[mask_left] * 1000
 
-ax1.plot(x_left_pm, c_plus_ratio[mask_left], 'r-', linewidth=1, marker='o', markersize=2, label=r'$c_+/c_0$ (cation)')
-ax1.plot(x_left_pm, c_minus_ratio[mask_left], 'b-', linewidth=1, marker='s', markersize=2, label=r'$c_-/c_0$ (anion)')
+ax1.plot(x_left_pm, c_plus_ratio[mask_left], 'r-', linewidth=1, marker='o', markersize=2, label=r'$n_+/n_0$ (cation)')
+ax1.plot(x_left_pm, c_minus_ratio[mask_left], 'b-', linewidth=1, marker='s', markersize=2, label=r'$n_-/n_0$ (anion)')
 ax1.axhline(y=1, color='gray', linestyle='--', linewidth=0.5)
-set_labels(ax1, 'Distance from anode (pm)', r'$c/c_0$')
+set_labels(ax1, 'Distance from anode (pm)', r'$n/n_0$')
 ax1.set_title(f'(a) Left EDL (Anode, $\\phi$ = {phi_left_mV:+.0f} mV)', fontsize=10, fontweight='bold')
 ax1.set_xlim([0, 500])
 ax1.set_ylim([0, 8])
@@ -176,10 +176,10 @@ ax2 = axes[1]
 mask_right = x_nm >= (L_nm - 0.5)
 x_right_pm = (L_nm - x_nm[mask_right]) * 1000
 
-ax2.plot(x_right_pm[::-1], c_plus_ratio[mask_right][::-1], 'r-', linewidth=1, marker='o', markersize=2, label=r'$c_+/c_0$ (cation)')
-ax2.plot(x_right_pm[::-1], c_minus_ratio[mask_right][::-1], 'b-', linewidth=1, marker='s', markersize=2, label=r'$c_-/c_0$ (anion)')
+ax2.plot(x_right_pm[::-1], c_plus_ratio[mask_right][::-1], 'r-', linewidth=1, marker='o', markersize=2, label=r'$n_+/n_0$ (cation)')
+ax2.plot(x_right_pm[::-1], c_minus_ratio[mask_right][::-1], 'b-', linewidth=1, marker='s', markersize=2, label=r'$n_-/n_0$ (anion)')
 ax2.axhline(y=1, color='gray', linestyle='--', linewidth=0.5)
-set_labels(ax2, 'Distance from cathode (pm)', r'$c/c_0$')
+set_labels(ax2, 'Distance from cathode (pm)', r'$n/n_0$')
 ax2.set_title(f'(b) Right EDL (Cathode, $\\phi$ = {phi_right_mV:+.0f} mV)', fontsize=10, fontweight='bold')
 ax2.set_xlim([500, 0])  # Inverted x-axis
 ax2.set_ylim([0, 8])
