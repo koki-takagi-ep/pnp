@@ -75,6 +75,16 @@ Non-uniform grid with tanh-stretching near electrodes:
 
 ## Project Rules
 
+### Workflow: Commit and Push
+
+**作業が完了したら必ず以下の手順を実行すること：**
+
+1. README.md を更新（必要に応じて）
+2. 変更をコミット
+3. リモートにプッシュ
+
+**これを徹底すること。作業後にプッシュを忘れないこと。**
+
 ### README Updates
 
 **When adding/updating figures or plots, always update README.md:**
@@ -85,10 +95,10 @@ Non-uniform grid with tanh-stretching near electrodes:
 
 ### Pre-commit Checklist
 
-1. Commit code changes
-2. Verify README.md is up to date
+1. Update README.md if needed
+2. Commit code changes
 3. Include figures and data files in commit
-4. Push to branch
+4. **Push to remote branch（必須）**
 
 ## File Structure
 
