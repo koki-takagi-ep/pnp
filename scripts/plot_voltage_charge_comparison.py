@@ -39,17 +39,24 @@ def run_solver(phi0_mV, model='standard', ion_size=0.7):
     return None
 
 def gouy_chapman_analytical(phi_mV, c0_M=1.0, eps_r=12, T=298.15):
-    """Analytical Gouy-Chapman surface charge density."""
-    eps_0 = 8.854e-12
-    kB = 1.38e-23
-    e = 1.6e-19
-    NA = 6.022e23
+    """Analytical Gouy-Chapman surface charge density.
+
+    σ = √(8 ε₀ εᵣ kB T c₀ NA) × sinh(eψ₀ / 2kBT)
+
+    where ψ₀ is the surface-to-bulk potential (= Δφ/2 for symmetric dual electrode).
+    """
+    # Use same constants as the solver (pnp_solver.hpp)
+    eps_0 = 8.8541878128e-12
+    kB = 1.380649e-23
+    e = 1.602176634e-19
+    NA = 6.02214076e23
 
     c0 = c0_M * 1000  # mol/m³
-    phi = phi_mV * 1e-3 / 2  # EDL potential (half of applied)
-    phi_T = kB * T / e
+    psi0 = phi_mV * 1e-3 / 2  # Surface-to-bulk potential (half of applied)
+    phi_T = kB * T / e  # Thermal voltage
 
-    sigma = np.sqrt(8 * eps_0 * eps_r * kB * T * c0 * NA) * np.sinh(phi / phi_T)
+    # Gouy-Chapman: sinh argument is eψ₀/(2kBT) = ψ₀/(2φT)
+    sigma = np.sqrt(8 * eps_0 * eps_r * kB * T * c0 * NA) * np.sinh(psi0 / (2 * phi_T))
     return sigma * 1e2  # Convert to μC/cm²
 
 def main():
