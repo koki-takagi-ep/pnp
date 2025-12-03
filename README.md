@@ -76,6 +76,14 @@ python3 scripts/plot_dual_electrode.py
 
 *N = 4001 で計算。Standard PB と Gouy-Chapman の誤差は 300 mV でも 2.3% 以内。*
 
+### 濃度分布の比較
+
+<div align="center">
+<img src="results/model_comparison.png" width="600">
+
+*Bikerman モデルでは crowding 効果により表面濃度が制限される（c₋/c₀ ≈ 3.4 vs 7.0）*
+</div>
+
 ### 格子収束性
 
 <div align="center">
