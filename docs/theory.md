@@ -142,9 +142,30 @@ $$\sigma = \sqrt{8\varepsilon\varepsilon_0 k_B T c_0 N_A} \sinh\left(\frac{e\phi
 
 ---
 
-## Bikermanモデル
+## Bikermanモデル（Poisson-Fermi方程式）
 
 標準 PB 方程式は、高電位領域でイオン濃度が非物理的に高くなる問題がある。Bikerman モデルは有限イオンサイズを考慮することでこの問題を解決する。
+
+### Bikerman モデルと Poisson-Fermi 方程式の関係
+
+**Bikerman モデル**（1942）と **Poisson-Fermi 方程式**は本質的に同一のものを指す。
+
+| 名称 | 由来・強調点 |
+|------|-------------|
+| Bikerman モデル | 提唱者 J.J. Bikerman（1942）に由来する歴史的名称 |
+| Poisson-Fermi 方程式 | 統計力学的解釈を強調した現代的名称 |
+
+**「Fermi」の由来**：
+- Fermi-Dirac 統計では、フェルミ粒子は同じ量子状態を占有できない（Pauli の排他原理）
+- 同様に、有限サイズのイオンは同じ空間を占有できない（体積排除効果）
+- この類似性から、Bikerman の修正 Boltzmann 分布を「Fermi 型」と呼ぶ
+
+**数学的同値性**：
+両者とも同一の修正 Boltzmann 分布を使用：
+
+$$c_\pm = \frac{c_0 \exp(\mp \psi)}{1 - \nu + \nu \cosh(\psi)}$$
+
+文献によっては「modified Poisson-Boltzmann (mPB)」「lattice-gas model」とも呼ばれる。
 
 ### 修正 Boltzmann 分布
 

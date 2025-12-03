@@ -201,3 +201,5 @@ $$c_\pm = \frac{c_0 \exp(\mp \psi)}{1 - \nu + \nu \cosh(\psi)}$$
 ## ライセンス
 
 BSD 3-Clause License
+
+自由な利用・改変・再配布が可能（商用含む）。著作権表示の保持が必要。無保証。
