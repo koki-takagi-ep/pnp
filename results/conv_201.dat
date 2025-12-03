@@ -7,6 +7,14 @@
 # Thermal voltage: 25.6926 mV
 # Grid: non-uniform with stretching factor 1
 #
+# Surface charge density [uC/cm^2]:
+#   Left electrode:  0.163745
+#   Right electrode: -4.42167e-07
+# Capacitance [uF/cm^2]:
+#   Left EDL:  3.27489
+#   Right EDL: 0
+#   Total (series): 0
+#
 # Columns:
 # 1: x [nm]
 # 2: x/lambda_D [-]

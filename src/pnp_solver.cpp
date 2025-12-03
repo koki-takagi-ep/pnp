@@ -2661,6 +2661,11 @@ void PNPSolver1D::save_results(const std::string& filename) const {
     double e = PhysicalConstants::e;
     double NA = PhysicalConstants::NA;
 
+    // Compute charge and capacitance
+    auto [sigma_left, sigma_right] = compute_surface_charge();
+    auto [C_left, C_right] = compute_capacitance();
+    double C_total = compute_total_capacitance();
+
     file << "# 1D PNP Solver Results\n";
     file << "# Debye length: " << lambda_D_ * 1e9 << " nm\n";
     file << "# Left electrode potential: " << params_.phi_left * 1000.0 << " mV\n";
@@ -2669,6 +2674,14 @@ void PNPSolver1D::save_results(const std::string& filename) const {
     file << "# Bulk concentration: " << params_.c0 << " mol/m^3\n";
     file << "# Thermal voltage: " << phi_T_ * 1000.0 << " mV\n";
     file << "# Grid: non-uniform with stretching factor " << params_.grid_stretch << "\n";
+    file << "#\n";
+    file << "# Surface charge density [uC/cm^2]:\n";
+    file << "#   Left electrode:  " << sigma_left * 1e2 << "\n";
+    file << "#   Right electrode: " << sigma_right * 1e2 << "\n";
+    file << "# Capacitance [uF/cm^2]:\n";
+    file << "#   Left EDL:  " << C_left * 1e2 << "\n";
+    file << "#   Right EDL: " << C_right * 1e2 << "\n";
+    file << "#   Total (series): " << C_total * 1e2 << "\n";
     file << "#\n";
     file << "# Columns:\n";
     file << "# 1: x [nm]\n";
@@ -2766,6 +2779,57 @@ double PNPSolver1D::compute_Linf_error() const {
     }
 
     return max_error;
+}
+
+std::pair<double, double> PNPSolver1D::compute_surface_charge() const {
+    // Compute surface charge density using Gauss's law:
+    // Left electrode (outward normal = -x):  σ_L = -ε₀εᵣ(dφ/dx)|x=0
+    // Right electrode (outward normal = +x): σ_R = +ε₀εᵣ(dφ/dx)|x=L
+    //
+    // Use 2nd-order one-sided finite difference for accuracy
+
+    // Left electrode: 2nd-order forward difference
+    // dφ/dx ≈ (-3φ₀ + 4φ₁ - φ₂) / (x₂ - x₀)
+    double dx_left = x_[2] - x_[0];
+    double dphi_dx_left = (-3.0 * phi_[0] + 4.0 * phi_[1] - phi_[2]) / dx_left;
+    double sigma_left = -eps_ * dphi_dx_left;
+
+    // Right electrode: 2nd-order backward difference
+    // dφ/dx ≈ (3φₙ - 4φₙ₋₁ + φₙ₋₂) / (xₙ - xₙ₋₂)
+    int n = params_.N;
+    double dx_right = x_[n-1] - x_[n-3];
+    double dphi_dx_right = (3.0 * phi_[n-1] - 4.0 * phi_[n-2] + phi_[n-3]) / dx_right;
+    double sigma_right = eps_ * dphi_dx_right;  // Note: positive sign for right electrode
+
+    return std::make_pair(sigma_left, sigma_right);
+}
+
+std::pair<double, double> PNPSolver1D::compute_capacitance() const {
+    // Compute differential capacitance: C = |σ| / |Δφ_EDL|
+    // where Δφ_EDL is the potential drop across each EDL
+
+    auto [sigma_left, sigma_right] = compute_surface_charge();
+
+    // EDL potential drops (relative to bulk)
+    double delta_phi_left = std::abs(phi_[0] - phi_bulk_);
+    double delta_phi_right = std::abs(phi_[params_.N - 1] - phi_bulk_);
+
+    // Avoid division by zero
+    double C_left = (delta_phi_left > 1e-15) ? std::abs(sigma_left) / delta_phi_left : 0.0;
+    double C_right = (delta_phi_right > 1e-15) ? std::abs(sigma_right) / delta_phi_right : 0.0;
+
+    return std::make_pair(C_left, C_right);
+}
+
+double PNPSolver1D::compute_total_capacitance() const {
+    // Two EDLs in series: 1/C_total = 1/C_left + 1/C_right
+    auto [C_left, C_right] = compute_capacitance();
+
+    if (C_left < 1e-15 || C_right < 1e-15) {
+        return 0.0;
+    }
+
+    return 1.0 / (1.0 / C_left + 1.0 / C_right);
 }
 
 } // namespace pnp

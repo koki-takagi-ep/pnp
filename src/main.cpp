@@ -275,6 +275,20 @@ int main(int argc, char* argv[]) {
         std::cout << "  Bulk potential (self-consistent): " << phi_bulk * 1000.0 << " mV\n";
     }
 
+    // Compute and display charge and capacitance
+    auto [sigma_left, sigma_right] = solver.compute_surface_charge();
+    auto [C_left, C_right] = solver.compute_capacitance();
+    double C_total = solver.compute_total_capacitance();
+
+    std::cout << "\nCharge Analysis:\n";
+    std::cout << "  Surface charge density:\n";
+    std::cout << "    Left electrode:  " << std::showpos << sigma_left * 1e2 << std::noshowpos << " μC/cm²\n";
+    std::cout << "    Right electrode: " << std::showpos << sigma_right * 1e2 << std::noshowpos << " μC/cm²\n";
+    std::cout << "  Electroneutrality check: Σσ = " << (sigma_left + sigma_right) * 1e2 << " μC/cm²\n";
+    std::cout << "\nCapacitance:\n";
+    std::cout << "  Single EDL:  " << C_left * 1e2 << " μF/cm² (left), " << C_right * 1e2 << " μF/cm² (right)\n";
+    std::cout << "  Total (series): " << C_total * 1e2 << " μF/cm²\n";
+
     // Compute error metrics against Gouy-Chapman theory
     double L2_error = solver.compute_L2_error();
     double L2_rel_error = solver.compute_relative_L2_error();

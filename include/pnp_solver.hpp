@@ -17,6 +17,7 @@
 #include <vector>
 #include <string>
 #include <cmath>
+#include <utility>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -205,6 +206,29 @@ public:
      * @brief Get model name as string
      */
     std::string get_model_name() const;
+
+    /**
+     * @brief Compute surface charge density at electrodes using Gauss's law
+     * @return pair of (sigma_left, sigma_right) in C/m^2
+     *
+     * Uses σ = -ε₀εᵣ(dφ/dx) at electrode surfaces with 2nd-order FD
+     * For closed system: sigma_left + sigma_right ≈ 0 (electroneutrality)
+     */
+    std::pair<double, double> compute_surface_charge() const;
+
+    /**
+     * @brief Compute differential capacitance of each EDL
+     * @return pair of (C_left, C_right) in F/m^2
+     *
+     * C = |σ| / |Δφ_EDL| where Δφ_EDL is potential drop across EDL
+     */
+    std::pair<double, double> compute_capacitance() const;
+
+    /**
+     * @brief Compute total capacitance of the capacitor (two EDLs in series)
+     * @return Total capacitance in F/m^2
+     */
+    double compute_total_capacitance() const;
 
 private:
     PNPParameters params_;
