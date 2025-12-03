@@ -7,9 +7,10 @@
 1. [支配方程式](#支配方程式)
 2. [Poisson-Boltzmann方程式の導出](#poisson-boltzmann方程式の導出)
 3. [Gouy-Chapman解析解](#gouy-chapman解析解)
-4. [Bikermanモデル](#bikermanモデル)
-5. [数値解法](#数値解法)
-6. [境界条件](#境界条件)
+4. [Bikermanモデル（Poisson-Fermi方程式）](#bikermanモデルpoisson-fermi方程式)
+5. [Modified Poisson-Fermi 方程式（将来拡張）](#modified-poisson-fermi-方程式将来拡張)
+6. [数値解法](#数値解法)
+7. [境界条件](#境界条件)
 
 ---
 
@@ -192,6 +193,66 @@ $$\frac{d^2 \psi}{d \xi^2} = \frac{\sinh(\psi)}{g(\psi)}$$
 - 非物理的な濃度 c > 1/(a³NA) を防止
 
 **参考文献**: Kilic, Bazant & Ajdari, *Phys. Rev. E* 75, 021502 (2007)
+
+---
+
+## Modified Poisson-Fermi 方程式（将来拡張）
+
+Bikerman モデル（Poisson-Fermi）は **crowding（混雑）** 効果のみを記述する。イオン液体では、短距離静電相関による **overscreening（過遮蔽）** も重要となる。Bazant et al. (2011) はこれらを統一的に扱う修正理論を提案した。
+
+### Overscreening と Crowding
+
+| 効果 | 物理的起源 | 支配的な条件 |
+|------|-----------|-------------|
+| Crowding | 有限イオンサイズ（体積排除） | 高電圧 |
+| Overscreening | 短距離静電相関 | 低電圧 |
+
+**Overscreening**: 電極表面の電荷を対イオン第一層が過剰に遮蔽し、第二層では逆符号の電荷過剰が生じる。これが減衰振動的に繰り返され、電荷密度が空間的に振動する。
+
+### Modified Poisson-Fermi 方程式
+
+Landau-Ginzburg 型の自由エネルギー汎関数に静電相関項を追加：
+
+$$G = \int_V d\mathbf{r} \left[ g + \rho\phi - \frac{\varepsilon}{2}\left( |\nabla\phi|^2 + \ell_c^2 (\nabla^2\phi)^2 \right) \right]$$
+
+ここで ℓc は静電相関長（イオンサイズ程度）。変分原理から **4階微分方程式** が得られる：
+
+$$(1 - \delta_c^2 \nabla^2)\nabla^2 \psi = \frac{\sinh\psi}{1 + 2\gamma\sinh^2(\psi/2)}$$
+
+展開形：
+
+$$\nabla^2 \psi - \delta_c^2 \nabla^4 \psi = \frac{\sinh\psi}{g(\psi)}$$
+
+- **左辺第1項**: 通常の Poisson（mean-field）
+- **左辺第2項**: 静電相関（overscreening を記述）
+- **右辺**: Bikerman の crowding 効果
+- **δc = ℓc/λD**: 無次元相関長
+
+### 境界条件
+
+4階方程式のため、各境界で4個の条件が必要：
+
+1. 電位指定: φ = φ₀
+2. 標準境界条件: ε∇φ·n̂ = −σ
+3. 電荷密度勾配ゼロ: n̂·∇(∇²φ) = 0（表面で電荷密度が「平坦」）
+4. （系に応じて追加条件）
+
+### 数値実装への影響
+
+| 項目 | Bikerman（現在） | Modified PF |
+|------|-----------------|-------------|
+| 微分階数 | 2階 | 4階 |
+| 境界条件数 | 2個/境界 | 4個/境界 |
+| 離散化ステンシル | 3点 | 5点 |
+| 追加パラメータ | — | 相関長 ℓc |
+
+### 本ソルバーの現状
+
+現在は **Bikerman モデル（2階）のみ実装**。高電圧での crowding 効果（容量飽和）は正しく再現される。
+
+低電圧での overscreening（電荷密度振動）を再現するには、将来的に4階微分項の実装が必要。
+
+**参考文献**: Bazant, Storey & Kornyshev, *Phys. Rev. Lett.* 106, 046102 (2011)
 
 ---
 
