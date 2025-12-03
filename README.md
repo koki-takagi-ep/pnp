@@ -55,15 +55,35 @@ $$\frac{d^2 \phi}{d x^2} = -\frac{e}{\varepsilon}(z_+ c_+ + z_- c_-)$$
 
 $$\frac{\partial c_\pm}{\partial t} = D_\pm \frac{\partial}{\partial x} \left( \frac{\partial c_\pm}{\partial x} \pm \frac{e c_\pm}{k_B T} \frac{\partial \phi}{\partial x} \right)$$
 
-### 定常状態解（Boltzmann 分布）
+### Poisson-Boltzmann 方程式の導出（PNP の定常解）
 
-定常状態かつフラックスゼロ（**J** = 0）の条件下では、イオン濃度は Boltzmann 分布に従う：
+**Poisson-Boltzmann (PB) 方程式は、PNP 方程式系の定常状態解として導出される。** これは独立した方程式ではなく、PNP の特殊ケースである。
+
+**導出の流れ**:
+
+1. **定常状態条件**: ∂c/∂t = 0 より、連続の式から ∇·**J** = 0
+2. **ゼロフラックス条件**: 阻止電極（イオンが透過しない境界）では **J** = 0
+3. **Nernst-Planck 方程式にゼロフラックス条件を適用**:
+
+$$\mathbf{J} = -D \left( \nabla c + \frac{ze c}{k_B T} \nabla \phi \right) = 0$$
+
+これを整理すると：
+
+$$\frac{\nabla c}{c} = -\frac{ze}{k_B T} \nabla \phi$$
+
+4. **積分して Boltzmann 分布を得る**:
+
+$$\ln c - \ln c_0 = -\frac{ze}{k_B T}(\phi - \phi_{\text{bulk}})$$
+
+バルク条件（φ_bulk = 0, c = c₀）を基準として：
 
 $$c_\pm = c_0 \exp\left( \mp \frac{e \phi}{k_B T} \right)$$
 
-これを Poisson 方程式に代入すると **Poisson-Boltzmann 方程式** が得られる：
+5. **Poisson 方程式に代入して PB 方程式を得る**:
 
-$$\frac{d^2 \phi}{d x^2} = \frac{2 e N_A c_0}{\varepsilon} \sinh\left( \frac{e \phi}{k_B T} \right)$$
+$$\frac{d^2 \phi}{d x^2} = -\frac{e N_A}{\varepsilon}(c_+ - c_-) = \frac{2 e N_A c_0}{\varepsilon} \sinh\left( \frac{e \phi}{k_B T} \right)$$
+
+**重要**: PB 方程式は PNP 方程式系において「定常状態」かつ「ゼロフラックス」という2つの条件が満たされたときにのみ成立する。過渡状態や電流が流れる系では、完全な PNP 方程式系を解く必要がある。
 
 ### 無次元化
 
