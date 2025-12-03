@@ -3,9 +3,16 @@ build/
 *.o
 *.a
 
-# Results (keep .dat and images for documentation)
-# Uncomment to ignore:
-# results/*.dat
+# Results - test/debug directories
+results/snapshots/
+results/transient_snapshots/
+results/transient_uniform/
+results/continuation_test/
+results/convergence/
+results/dual_electrode/
+results/gummel_test/
+results/newton_test/
+results/voltage_sweep/
 
 # Python
 __pycache__/
