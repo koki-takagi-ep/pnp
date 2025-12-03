@@ -176,25 +176,27 @@ def main():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.4, 3.7))
 
     N_arr = np.array(N_values[:-1])
+    L = 50.0  # Domain length in nm
+    dx_arr = L / (N_arr - 1)  # Grid spacing in nm
 
     # Left: Surface charge error
-    ax1.loglog(N_arr, sigma_errors, 'o-', color='C0', linewidth=1.5, markersize=6)
+    ax1.loglog(dx_arr, sigma_errors, 'o-', color='C0', linewidth=1.5, markersize=6)
     # 2nd order reference
-    N_ref_line = np.array([N_arr[0], N_arr[-1]])
-    err_ref_2 = sigma_errors[0] * (N_ref_line[0] / N_ref_line)**2
-    ax1.loglog(N_ref_line, err_ref_2, '--', color='gray', linewidth=1, label='2nd order')
-    set_labels(ax1, r'Grid points $N$', r'Surface charge error (\%)')
-    ax1.legend(loc='upper right', frameon=False, fontsize=8)
+    dx_ref_line = np.array([dx_arr[0], dx_arr[-1]])
+    err_ref_2 = sigma_errors[-1] * (dx_ref_line / dx_ref_line[-1])**2
+    ax1.loglog(dx_ref_line, err_ref_2, '--', color='gray', linewidth=1, label='2nd order')
+    set_labels(ax1, r'Grid spacing $\Delta x$ (nm)', r'Surface charge error (\%)')
+    ax1.legend(loc='lower right', frameon=False, fontsize=8)
     ax1.set_title('(a) Surface charge vs analytical', fontsize=10)
     # Remove auto minor locator for log scale
     ax1.minorticks_off()
 
     # Right: L2 error (Richardson)
-    ax2.loglog(N_arr, l2_errors, 's-', color='C1', linewidth=1.5, markersize=6)
-    err_ref_2_l2 = l2_errors[0] * (N_ref_line[0] / N_ref_line)**2
-    ax2.loglog(N_ref_line, err_ref_2_l2, '--', color='gray', linewidth=1, label='2nd order')
-    set_labels(ax2, r'Grid points $N$', r'L2 error vs $N$=6401 (mV)')
-    ax2.legend(loc='upper right', frameon=False, fontsize=8)
+    ax2.loglog(dx_arr, l2_errors, 's-', color='C1', linewidth=1.5, markersize=6)
+    err_ref_2_l2 = l2_errors[-1] * (dx_ref_line / dx_ref_line[-1])**2
+    ax2.loglog(dx_ref_line, err_ref_2_l2, '--', color='gray', linewidth=1, label='2nd order')
+    set_labels(ax2, r'Grid spacing $\Delta x$ (nm)', r'L2 error vs $N$=6401 (mV)')
+    ax2.legend(loc='lower right', frameon=False, fontsize=8)
     ax2.set_title('(b) Potential profile (Richardson)', fontsize=10)
     ax2.minorticks_off()
 
