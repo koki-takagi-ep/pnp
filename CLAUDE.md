@@ -23,6 +23,10 @@ make clean        # Clean build artifacts
 # Python environment (use .venv)
 source .venv/bin/activate
 python3 scripts/plot_dual_electrode.py
+
+# Convergence tests
+bash scripts/run_convergence.sh           # Basic convergence study
+bash scripts/run_comprehensive_convergence.sh  # Full parametric study
 ```
 
 ## Key CLI Options
@@ -32,10 +36,12 @@ python3 scripts/plot_dual_electrode.py
 | `--phi0 <mV>` | Left electrode potential | 100 |
 | `--phi-right <mV>` | Right electrode potential | 0 |
 | `--c0 <mol/L>` | Bulk concentration | 1.0 |
+| `--L <nm>` | Domain length | 50 |
+| `--eps <value>` | Relative permittivity | 12 |
 | `--closed-system` | Zero-flux BC at both ends | off |
-| `--dual-electrode` | Symmetric grid for both electrodes | off |
 | `--model <type>` | standard or bikerman | standard |
 | `--N <points>` | Grid points | 1001 |
+| `--stretch <factor>` | Grid stretching factor | 3.0 |
 
 ## Architecture Overview
 
@@ -110,6 +116,17 @@ Non-uniform grid with tanh-stretching near electrodes:
 - `results/`: Output data (.dat) and figures (.png)
 - `docs/`: Reference papers (PDF)
 
+## Notation Convention
+
+**Use number density n instead of concentration c in documentation and plots:**
+- Axis labels: `$n/n_0$` (not `$c/c_0$`)
+- Legend: `$n_+$`, `$n_-$` (not `$c_+$`, `$c_-$`)
+- README equations use n [m⁻³], with note: n = c × NA × 10³
+
+**Avoid underscores outside math mode in Markdown:**
+- Use Unicode subscripts: λD, kB, εᵣ, NA, φT (not λ_D, k_B, ε_r)
+- Or wrap in math mode: `$\lambda_D$`
+
 ## Plot Style Guide
 
 Standard plot style is defined in `styles/plot_style.py`. Use this for all figures.
@@ -129,10 +146,11 @@ plt.tight_layout()
 ```
 
 **Key style elements:**
-- Figure size: 3.7 x 3.7 inches (single panel)
+- Figure size: 3.7 x 3.7 inches (square, single panel)
 - Font: 10pt, bold for axis labels
 - Ticks: direction='in', on both sides, major length=6, minor length=3
-- Minor ticks: AutoMinorLocator(5) by default
+- Minor ticks: AutoMinorLocator(5) - do NOT use on log scales
 - Colors: viridis colormap (`get_viridis_colors(n)`)
 - Line width: 1
 - No legend by default (add only if needed)
+- All plots must be square format
