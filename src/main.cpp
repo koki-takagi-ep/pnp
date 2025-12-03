@@ -15,7 +15,8 @@
 void print_usage(const char* program_name) {
     std::cout << "Usage: " << program_name << " [options]\n"
               << "\nOptions:\n"
-              << "  --phi0 <value>      Surface potential in mV (default: 100)\n"
+              << "  --phi0 <value>      Left electrode potential in mV (default: 100)\n"
+              << "  --phi-right <value> Right electrode potential in mV (default: 0)\n"
               << "  --c0 <value>        Bulk concentration in mol/L (default: 1.0)\n"
               << "  --eps <value>       Relative permittivity (default: 12)\n"
               << "  --L <value>         Domain length in nm (default: 100)\n"
@@ -24,6 +25,7 @@ void print_usage(const char* program_name) {
               << "  --model <type>      Model type: standard or bikerman (default: standard)\n"
               << "  --ion-size <value>  Ion diameter in nm for Bikerman model (default: 0.7)\n"
               << "  --stretch <value>   Grid stretching factor (default: 3.0, use 1.0 for uniform)\n"
+              << "  --closed-system     Use zero-flux BC at both ends (capacitor model)\n"
               << "  --transient         Run transient simulation instead of steady-state\n"
               << "  --dt <value>        Time step in ns for transient (default: 0.1)\n"
               << "  --t-final <value>   Final time in µs for transient (default: 1.0)\n"
@@ -41,7 +43,8 @@ void print_usage(const char* program_name) {
 
 int main(int argc, char* argv[]) {
     // Default parameters
-    double phi0_mV = 100.0;       // Surface potential [mV]
+    double phi0_mV = 100.0;       // Left electrode potential [mV]
+    double phi_right_mV = 0.0;    // Right electrode potential [mV]
     double c0_molL = 1.0;         // Bulk concentration [mol/L]
     double eps_r = 12.0;          // Relative permittivity
     double L_nm = 100.0;          // Domain length [nm]
@@ -50,6 +53,7 @@ int main(int argc, char* argv[]) {
     std::string model_type = "standard";  // Model type: standard or bikerman
     double ion_size_nm = 0.7;     // Ion diameter for Bikerman model [nm]
     double grid_stretch = 3.0;    // Grid stretching factor
+    bool closed_system = false;   // Use zero-flux BC at both ends
     bool run_transient = false;   // Run transient simulation
     double dt_ns = 0.1;           // Time step [ns]
     double t_final_us = 1.0;      // Final time [µs]
@@ -71,6 +75,8 @@ int main(int argc, char* argv[]) {
             return 0;
         } else if (arg == "--phi0" && i + 1 < argc) {
             phi0_mV = std::atof(argv[++i]);
+        } else if (arg == "--phi-right" && i + 1 < argc) {
+            phi_right_mV = std::atof(argv[++i]);
         } else if (arg == "--c0" && i + 1 < argc) {
             c0_molL = std::atof(argv[++i]);
         } else if (arg == "--eps" && i + 1 < argc) {
@@ -87,6 +93,8 @@ int main(int argc, char* argv[]) {
             ion_size_nm = std::atof(argv[++i]);
         } else if (arg == "--stretch" && i + 1 < argc) {
             grid_stretch = std::atof(argv[++i]);
+        } else if (arg == "--closed-system") {
+            closed_system = true;
         } else if (arg == "--transient") {
             run_transient = true;
         } else if (arg == "--dt" && i + 1 < argc) {
@@ -127,12 +135,14 @@ int main(int argc, char* argv[]) {
     // Setup parameters
     pnp::PNPParameters params;
     params.phi_left = phi0_mV * 1e-3;      // Convert mV to V
+    params.phi_right = phi_right_mV * 1e-3; // Convert mV to V
     params.c0 = c0_molL * 1000.0;          // Convert mol/L to mol/m^3
     params.eps_r = eps_r;
     params.L = L_nm * 1e-9;                // Convert nm to m
     params.N = N;
     params.a = ion_size_nm * 1e-9;         // Convert nm to m
     params.grid_stretch = grid_stretch;
+    params.closed_system = closed_system;
 
     // Set model type
     if (model_type == "bikerman") {
@@ -142,7 +152,8 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << "Parameters:\n";
-    std::cout << "  Surface potential: " << phi0_mV << " mV\n";
+    std::cout << "  Left electrode potential: " << phi0_mV << " mV\n";
+    std::cout << "  Right electrode potential: " << phi_right_mV << " mV\n";
     std::cout << "  Bulk concentration: " << c0_molL << " mol/L\n";
     std::cout << "  Relative permittivity: " << eps_r << "\n";
     std::cout << "  Domain length: " << L_nm << " nm\n";
@@ -150,6 +161,11 @@ int main(int argc, char* argv[]) {
     std::cout << "  Model: " << model_type << "\n";
     if (model_type == "bikerman") {
         std::cout << "  Ion size: " << ion_size_nm << " nm\n";
+    }
+    if (closed_system) {
+        std::cout << "  Boundary: closed system (zero-flux at both ends)\n";
+    } else {
+        std::cout << "  Boundary: open system (Dirichlet c=c0 at right)\n";
     }
     if (run_transient) {
         std::cout << "  Mode: transient\n";
@@ -237,14 +253,27 @@ int main(int argc, char* argv[]) {
     std::cout << "\n========================================\n";
     std::cout << "Solution Summary:\n";
     std::cout << "========================================\n";
-    std::cout << "  Potential at surface: " << phi[0] * 1000.0 << " mV\n";
-    std::cout << "  Potential at bulk: " << phi.back() * 1000.0 << " mV\n";
-    std::cout << "  c+ at surface: " << c_plus[0] << " mol/m^3 (ratio: "
-              << c_plus[0] / params.c0 << ")\n";
-    std::cout << "  c- at surface: " << c_minus[0] << " mol/m^3 (ratio: "
-              << c_minus[0] / params.c0 << ")\n";
-    std::cout << "  c+ at bulk: " << c_plus.back() << " mol/m^3\n";
-    std::cout << "  c- at bulk: " << c_minus.back() << " mol/m^3\n";
+
+    // Get bulk potential for closed systems
+    double phi_bulk = solver.get_bulk_potential();
+    int n_mid = phi.size() / 2;
+
+    std::cout << "  Left electrode (x=0):\n";
+    std::cout << "    Potential: " << phi[0] * 1000.0 << " mV\n";
+    std::cout << "    c+/c0: " << c_plus[0] / params.c0 << "\n";
+    std::cout << "    c-/c0: " << c_minus[0] / params.c0 << "\n";
+    std::cout << "  Bulk (x=L/2):\n";
+    std::cout << "    Potential: " << phi[n_mid] * 1000.0 << " mV\n";
+    std::cout << "    c+/c0: " << c_plus[n_mid] / params.c0 << "\n";
+    std::cout << "    c-/c0: " << c_minus[n_mid] / params.c0 << "\n";
+    std::cout << "  Right electrode (x=L):\n";
+    std::cout << "    Potential: " << phi.back() * 1000.0 << " mV\n";
+    std::cout << "    c+/c0: " << c_plus.back() / params.c0 << "\n";
+    std::cout << "    c-/c0: " << c_minus.back() / params.c0 << "\n";
+
+    if (params.closed_system) {
+        std::cout << "  Bulk potential (self-consistent): " << phi_bulk * 1000.0 << " mV\n";
+    }
 
     // Compute error metrics against Gouy-Chapman theory
     double L2_error = solver.compute_L2_error();

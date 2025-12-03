@@ -1,25 +1,22 @@
 #!/usr/bin/env python3
 """
 Plot results from the 1D PNP solver.
-Style reference: koki-takagi-ep/fluid
+Uses standard plot style from styles/plot_style.py
 """
 
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
-from matplotlib.ticker import AutoMinorLocator
 from pathlib import Path
 import sys
 
+# Add project root to path for styles import
+script_dir = Path(__file__).parent
+project_dir = script_dir.parent
+sys.path.insert(0, str(project_dir))
 
-def setup_axis_style(ax):
-    """Setup axis style similar to fluid repository."""
-    ax.tick_params(axis='both', which='major', direction='in', length=6, width=1, labelsize=9)
-    ax.tick_params(axis='both', which='minor', direction='in', length=3, width=0.5)
-    ax.xaxis.set_minor_locator(AutoMinorLocator(5))
-    ax.yaxis.set_minor_locator(AutoMinorLocator(5))
-    ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+from styles.plot_style import setup_plot_style, setup_axis_style, set_labels, FIGURE_SIZES
 
 
 def load_data(filename):
@@ -41,15 +38,14 @@ def load_data(filename):
 
 def plot_potential(data, output_dir):
     """Plot electric potential profile with GC comparison."""
-    fig, ax = plt.subplots(figsize=(6, 6))
+    setup_plot_style()
+    fig, ax = plt.subplots(figsize=FIGURE_SIZES['single'])
 
-    ax.plot(data['x_nm'], data['phi_mV'], 'b-', label='PNP numerical', linewidth=1.5)
-    ax.plot(data['x_nm'], data['phi_gc_mV'], 'r--', label='Gouy-Chapman', linewidth=1.5)
+    ax.plot(data['x_nm'], data['phi_mV'], 'b-', label='PNP numerical', linewidth=1)
+    ax.plot(data['x_nm'], data['phi_gc_mV'], 'r--', label='Gouy-Chapman', linewidth=1)
 
-    ax.set_xlabel(r'$x$ [nm]', fontsize=11, fontweight='bold')
-    ax.set_ylabel(r'$\phi$ [mV]', fontsize=11, fontweight='bold')
-    ax.set_title('Electric Potential Profile', fontsize=11, fontweight='bold')
-    ax.legend(loc='best', fontsize=9)
+    set_labels(ax, r'$x$ (nm)', r'$\phi$ (mV)')
+    ax.legend(loc='best', fontsize=8)
     ax.set_xlim([0, min(100, data['x_nm'].max())])
 
     setup_axis_style(ax)
@@ -62,16 +58,15 @@ def plot_potential(data, output_dir):
 
 def plot_concentrations(data, output_dir):
     """Plot ion concentration profiles."""
-    fig, ax = plt.subplots(figsize=(6, 6))
+    setup_plot_style()
+    fig, ax = plt.subplots(figsize=FIGURE_SIZES['single'])
 
-    ax.plot(data['x_nm'], data['c_plus_norm'], 'r-', label=r'$c_+/c_0$ (cation)', linewidth=1.5)
-    ax.plot(data['x_nm'], data['c_minus_norm'], 'b-', label=r'$c_-/c_0$ (anion)', linewidth=1.5)
-    ax.axhline(y=1.0, color='gray', linestyle=':', linewidth=1)
+    ax.plot(data['x_nm'], data['c_plus_norm'], 'r-', label=r'$c_+/c_0$ (cation)', linewidth=1)
+    ax.plot(data['x_nm'], data['c_minus_norm'], 'b-', label=r'$c_-/c_0$ (anion)', linewidth=1)
+    ax.axhline(y=1.0, color='gray', linestyle=':', linewidth=0.5)
 
-    ax.set_xlabel(r'$x$ [nm]', fontsize=11, fontweight='bold')
-    ax.set_ylabel(r'$c / c_0$', fontsize=11, fontweight='bold')
-    ax.set_title('Ion Concentration Profiles', fontsize=11, fontweight='bold')
-    ax.legend(loc='best', fontsize=9)
+    set_labels(ax, r'$x$ (nm)', r'$c / c_0$')
+    ax.legend(loc='best', fontsize=8)
     ax.set_xlim([0, min(100, data['x_nm'].max())])
     ax.set_yscale('log')
 
@@ -85,14 +80,13 @@ def plot_concentrations(data, output_dir):
 
 def plot_charge_density(data, output_dir):
     """Plot charge density profile."""
-    fig, ax = plt.subplots(figsize=(6, 6))
+    setup_plot_style()
+    fig, ax = plt.subplots(figsize=FIGURE_SIZES['single'])
 
-    ax.plot(data['x_nm'], data['rho'] / 1e6, 'g-', linewidth=1.5)
-    ax.axhline(y=0, color='gray', linestyle=':', linewidth=1)
+    ax.plot(data['x_nm'], data['rho'] / 1e6, 'g-', linewidth=1)
+    ax.axhline(y=0, color='gray', linestyle=':', linewidth=0.5)
 
-    ax.set_xlabel(r'$x$ [nm]', fontsize=11, fontweight='bold')
-    ax.set_ylabel(r'$\rho$ [MC/m$^3$]', fontsize=11, fontweight='bold')
-    ax.set_title('Space Charge Density', fontsize=11, fontweight='bold')
+    set_labels(ax, r'$x$ (nm)', r'$\rho$ (MC/m$^3$)')
     ax.set_xlim([0, min(100, data['x_nm'].max())])
 
     setup_axis_style(ax)
@@ -105,14 +99,14 @@ def plot_charge_density(data, output_dir):
 
 def plot_combined(data, output_dir):
     """Create a combined 2x2 plot."""
-    fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+    setup_plot_style()
+    fig, axes = plt.subplots(2, 2, figsize=FIGURE_SIZES['2x2'])
 
     # (a) Potential
     ax = axes[0, 0]
-    ax.plot(data['x_nm'], data['phi_mV'], 'b-', label='PNP', linewidth=1.5)
-    ax.plot(data['x_nm'], data['phi_gc_mV'], 'r--', label='G-C', linewidth=1.5)
-    ax.set_xlabel(r'$x$ [nm]', fontsize=10, fontweight='bold')
-    ax.set_ylabel(r'$\phi$ [mV]', fontsize=10, fontweight='bold')
+    ax.plot(data['x_nm'], data['phi_mV'], 'b-', label='PNP', linewidth=1)
+    ax.plot(data['x_nm'], data['phi_gc_mV'], 'r--', label='G-C', linewidth=1)
+    set_labels(ax, r'$x$ (nm)', r'$\phi$ (mV)')
     ax.set_title('(a) Electric Potential', fontsize=10, fontweight='bold')
     ax.legend(loc='best', fontsize=8)
     ax.set_xlim([0, min(100, data['x_nm'].max())])
@@ -120,20 +114,18 @@ def plot_combined(data, output_dir):
 
     # (b) Normalized potential
     ax = axes[0, 1]
-    ax.plot(data['x_nm'], data['phi_norm'], 'b-', linewidth=1.5)
-    ax.set_xlabel(r'$x$ [nm]', fontsize=10, fontweight='bold')
-    ax.set_ylabel(r'$e\phi / k_B T$', fontsize=10, fontweight='bold')
+    ax.plot(data['x_nm'], data['phi_norm'], 'b-', linewidth=1)
+    set_labels(ax, r'$x$ (nm)', r'$e\phi / k_B T$')
     ax.set_title('(b) Normalized Potential', fontsize=10, fontweight='bold')
     ax.set_xlim([0, min(100, data['x_nm'].max())])
     setup_axis_style(ax)
 
     # (c) Concentrations
     ax = axes[1, 0]
-    ax.plot(data['x_nm'], data['c_plus_norm'], 'r-', label=r'$c_+/c_0$', linewidth=1.5)
-    ax.plot(data['x_nm'], data['c_minus_norm'], 'b-', label=r'$c_-/c_0$', linewidth=1.5)
-    ax.axhline(y=1.0, color='gray', linestyle=':', linewidth=1)
-    ax.set_xlabel(r'$x$ [nm]', fontsize=10, fontweight='bold')
-    ax.set_ylabel(r'$c / c_0$', fontsize=10, fontweight='bold')
+    ax.plot(data['x_nm'], data['c_plus_norm'], 'r-', label=r'$c_+/c_0$', linewidth=1)
+    ax.plot(data['x_nm'], data['c_minus_norm'], 'b-', label=r'$c_-/c_0$', linewidth=1)
+    ax.axhline(y=1.0, color='gray', linestyle=':', linewidth=0.5)
+    set_labels(ax, r'$x$ (nm)', r'$c / c_0$')
     ax.set_title('(c) Ion Concentrations', fontsize=10, fontweight='bold')
     ax.legend(loc='best', fontsize=8)
     ax.set_xlim([0, min(100, data['x_nm'].max())])
@@ -142,10 +134,9 @@ def plot_combined(data, output_dir):
 
     # (d) Charge density
     ax = axes[1, 1]
-    ax.plot(data['x_nm'], data['rho'] / 1e6, 'g-', linewidth=1.5)
-    ax.axhline(y=0, color='gray', linestyle=':', linewidth=1)
-    ax.set_xlabel(r'$x$ [nm]', fontsize=10, fontweight='bold')
-    ax.set_ylabel(r'$\rho$ [MC/m$^3$]', fontsize=10, fontweight='bold')
+    ax.plot(data['x_nm'], data['rho'] / 1e6, 'g-', linewidth=1)
+    ax.axhline(y=0, color='gray', linestyle=':', linewidth=0.5)
+    set_labels(ax, r'$x$ (nm)', r'$\rho$ (MC/m$^3$)')
     ax.set_title('(d) Space Charge Density', fontsize=10, fontweight='bold')
     ax.set_xlim([0, min(100, data['x_nm'].max())])
     setup_axis_style(ax)
@@ -183,10 +174,11 @@ def compute_error_metrics(data):
 
 def plot_error_analysis(data, output_dir):
     """Plot error analysis comparing PNP with Gouy-Chapman."""
-    fig, ax = plt.subplots(figsize=(6, 6))
+    setup_plot_style()
+    fig, ax = plt.subplots(figsize=FIGURE_SIZES['single'])
 
     error = np.abs(data['phi_mV'] - data['phi_gc_mV'])
-    ax.plot(data['x_nm'], error, 'k-', linewidth=1.5)
+    ax.plot(data['x_nm'], error, 'k-', linewidth=1)
 
     # Compute and display error metrics
     metrics = compute_error_metrics(data)
@@ -197,9 +189,7 @@ def plot_error_analysis(data, output_dir):
     ax.text(0.95, 0.95, textstr, transform=ax.transAxes, fontsize=9,
             verticalalignment='top', horizontalalignment='right', bbox=props)
 
-    ax.set_xlabel(r'$x$ [nm]', fontsize=11, fontweight='bold')
-    ax.set_ylabel(r'$|\phi_{PNP} - \phi_{GC}|$ [mV]', fontsize=11, fontweight='bold')
-    ax.set_title('Numerical vs. Analytical Error', fontsize=11, fontweight='bold')
+    set_labels(ax, r'$x$ (nm)', r'$|\phi_{PNP} - \phi_{GC}|$ (mV)')
     ax.set_xlim([0, min(100, data['x_nm'].max())])
 
     setup_axis_style(ax)
@@ -212,14 +202,13 @@ def plot_error_analysis(data, output_dir):
 
 def plot_grid_distribution(data, output_dir):
     """Plot grid point distribution."""
-    fig, ax = plt.subplots(figsize=(6, 6))
+    setup_plot_style()
+    fig, ax = plt.subplots(figsize=FIGURE_SIZES['single'])
 
     x_nm = data['x_nm']
     ax.plot(range(len(x_nm)), x_nm, 'b.-', linewidth=1, markersize=2)
 
-    ax.set_xlabel('Grid index', fontsize=11, fontweight='bold')
-    ax.set_ylabel(r'$x$ [nm]', fontsize=11, fontweight='bold')
-    ax.set_title('Non-uniform Grid Distribution', fontsize=11, fontweight='bold')
+    set_labels(ax, 'Grid index', r'$x$ (nm)')
 
     setup_axis_style(ax)
     plt.tight_layout()
@@ -230,8 +219,6 @@ def plot_grid_distribution(data, output_dir):
 
 
 def main():
-    script_dir = Path(__file__).parent
-    project_dir = script_dir.parent
     results_dir = project_dir / 'results'
 
     if len(sys.argv) > 1:

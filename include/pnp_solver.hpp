@@ -72,6 +72,10 @@ struct PNPParameters {
     // Grid stretching parameter (higher = more clustering near interface)
     double grid_stretch;
 
+    // Boundary condition type
+    bool closed_system; // If true, use zero-flux BC at both ends (capacitor)
+                        // If false, use Dirichlet c=c0 at right (open system)
+
     // Model selection
     ModelType model;    // Standard PB or Modified (Bikerman)
 
@@ -95,6 +99,7 @@ struct PNPParameters {
         , max_iter(1000)
         , omega(0.3)
         , grid_stretch(3.0)  // Stretching factor for non-uniform grid
+        , closed_system(false) // Default: open system with Dirichlet BC at right
         , model(ModelType::STANDARD_PB)
         , a(0.7e-9)       // ~0.7 nm typical ion diameter for ionic liquids
     {}
@@ -192,6 +197,11 @@ public:
     double get_packing_fraction() const { return nu_; }
 
     /**
+     * @brief Get self-consistently determined bulk potential (for closed system)
+     */
+    double get_bulk_potential() const { return phi_bulk_; }
+
+    /**
      * @brief Get model name as string
      */
     std::string get_model_name() const;
@@ -215,6 +225,7 @@ private:
     double lambda_D_;  // Debye length [m]
     double phi_T_;     // Thermal voltage [V]
     double nu_;        // Packing fraction for Bikerman model
+    double phi_bulk_;  // Self-consistently determined bulk potential [V] (for closed system)
 
     void initialize();
     void create_nonuniform_grid();
