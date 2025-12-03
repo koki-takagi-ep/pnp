@@ -117,17 +117,18 @@ lines2, labels2 = ax3b.get_legend_handles_labels()
 ax3.legend(lines1 + lines2, labels1 + labels2, loc='right', fontsize=8)
 
 # Bottom right: Right electrode EDL (zoomed) - Linear scale with potential
+# Mirror image: x-axis reversed so electrode appears on right side
 ax4 = fig.add_subplot(2, 2, 4)
 mask_right = x_nm >= 99.5
 x_right_pm = (100 - x_nm[mask_right]) * 1000  # Distance from cathode in pm
 
-# Plot potential on left axis
+# Plot potential on left axis (data order unchanged, axis inverted)
 ax4.plot(x_right_pm[::-1], phi_mV[mask_right][::-1], 'k-', linewidth=2, label='φ [mV]')
 ax4.axhline(y=phi_bulk_mV, color='gray', linestyle='--', linewidth=1, alpha=0.5)
 ax4.set_xlabel('Distance from cathode [pm]')
 ax4.set_ylabel('φ [mV]')
 ax4.set_title(f'(d) Right EDL (Cathode, φ = {phi_right_mV:+.0f} mV)\nEMI$^+$ accumulation, BF$_4^-$ depletion')
-ax4.set_xlim([0, 500])
+ax4.set_xlim([500, 0])  # Inverted x-axis: electrode on right
 # Dynamic y-limits: from electrode potential to bulk potential with margin
 right_edl_ylim = [min(phi_bulk_mV, phi_right_mV) - 5, max(phi_bulk_mV, phi_right_mV) + 5]
 ax4.set_ylim(right_edl_ylim)
@@ -150,7 +151,7 @@ ax4b.fill_between(x_right_pm[::-1], 0, c_plus_ratio[mask_right][::-1], alpha=0.1
 # Combined legend
 lines1, labels1 = ax4.get_legend_handles_labels()
 lines2, labels2 = ax4b.get_legend_handles_labels()
-ax4.legend(lines1 + lines2, labels1 + labels2, loc='right', fontsize=8)
+ax4.legend(lines1 + lines2, labels1 + labels2, loc='center left', fontsize=8)  # Legend on left side
 
 plt.suptitle(f'Figure 1: Dual-Electrode Model - EMI-BF$_4$ Ionic Liquid\n(φ$_L$ = {phi_left_mV:+.0f} mV, φ$_R$ = {phi_right_mV:+.0f} mV, φ$_{{bulk}}$ = {phi_bulk_mV:.0f} mV, c$_0$ = 1 M, λ$_D$ = 119 pm)',
              fontsize=14, y=0.98)
@@ -187,7 +188,7 @@ lambda_D_pm = 119  # pm
 ax1.axvline(x=lambda_D_pm, color='purple', linestyle=':', linewidth=2, label=f'λ$_D$ = {lambda_D_pm} pm')
 ax1.legend()
 
-# Right EDL with linear scale
+# Right EDL with linear scale (mirror image: electrode on right)
 ax2 = axes[1]
 mask_right = x_nm >= 99.5
 x_right_pm = (100 - x_nm[mask_right]) * 1000  # Distance from cathode in pm
@@ -198,7 +199,7 @@ ax2.axhline(y=1, color='gray', linestyle='--', linewidth=0.5, label='bulk')
 ax2.set_xlabel('Distance from cathode [pm]')
 ax2.set_ylabel('c/c$_0$ [-]')
 ax2.set_title(f'(b) Right EDL (Cathode, φ = {phi_right_mV:+.0f} mV)\nCation accumulation, Anion depletion')
-ax2.set_xlim([0, 500])
+ax2.set_xlim([500, 0])  # Inverted x-axis: electrode on right
 ax2.set_ylim([0, 8])
 ax2.grid(True, alpha=0.3)
 ax2.legend()
@@ -206,7 +207,7 @@ ax2.fill_between(x_right_pm[::-1], 0, c_plus_ratio[mask_right][::-1], alpha=0.2,
 
 # Add Debye length marker
 ax2.axvline(x=lambda_D_pm, color='purple', linestyle=':', linewidth=2, label=f'λ$_D$ = {lambda_D_pm} pm')
-ax2.legend()
+ax2.legend(loc='upper left')  # Legend on left side
 
 plt.suptitle('Figure 2: EDL Structure at Both Electrodes (Linear Scale)', fontsize=14, y=1.02)
 plt.tight_layout()
@@ -258,7 +259,7 @@ ax3.axvline(x=119, color='purple', linestyle=':', linewidth=2, label=f'λ$_D$ = 
 ax3.axhline(y=119, color='purple', linestyle=':', linewidth=2, alpha=0.5)
 ax3.legend()
 
-# Bottom right: Zoomed view near right electrode
+# Bottom right: Zoomed view near right electrode (mirror image: electrode on right)
 ax4 = axes[1, 1]
 mask_right = x_nm >= 99.0
 x_right_pm = (100 - x_nm[mask_right]) * 1000  # Distance from cathode
@@ -268,11 +269,11 @@ ax4.plot(x_right_pm[::-1], dx_right_pm[::-1], 'b-', linewidth=2, marker='o', mar
 ax4.set_xlabel('Distance from cathode [pm]')
 ax4.set_ylabel('Δx [pm]')
 ax4.set_title('(d) Grid Spacing Near Right Electrode (Cathode)')
-ax4.set_xlim([0, 1000])
+ax4.set_xlim([1000, 0])  # Inverted x-axis: electrode on right
 ax4.grid(True, alpha=0.3)
 ax4.axvline(x=119, color='purple', linestyle=':', linewidth=2, label=f'λ$_D$ = 119 pm')
 ax4.axhline(y=119, color='purple', linestyle=':', linewidth=2, alpha=0.5)
-ax4.legend()
+ax4.legend(loc='upper left')  # Legend on left side
 
 plt.suptitle('Figure 3: Grid Distribution for Dual-Electrode Model\n(Symmetric tanh-stretching, fine near both electrodes)',
              fontsize=14, y=0.98)

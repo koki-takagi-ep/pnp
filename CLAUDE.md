@@ -96,5 +96,33 @@ Non-uniform grid with tanh-stretching near electrodes:
 - `src/main.cpp`: CLI entry point with argument parsing
 - `include/pnp_solver.hpp`: Class definition and parameters struct
 - `scripts/plot_*.py`: Visualization scripts
+- `styles/`: Plot style utilities (see below)
 - `results/`: Output data (.dat) and figures (.png)
 - `docs/`: Reference papers (PDF)
+
+## Plot Style Guide
+
+Standard plot style is defined in `styles/plot_style.py`. Use this for all figures.
+
+```python
+from styles.plot_style import setup_plot_style, setup_axis_style, set_labels, FIGURE_SIZES
+
+setup_plot_style()  # Set global matplotlib defaults
+
+fig, ax = plt.subplots(figsize=FIGURE_SIZES['single'])  # 3.7 x 3.7 inches
+
+# ... plot data ...
+
+set_labels(ax, r'$x$ (units)', r'$y$ (units)')
+setup_axis_style(ax)  # Ticks: direction='in', both sides, minor ticks
+plt.tight_layout()
+```
+
+**Key style elements:**
+- Figure size: 3.7 x 3.7 inches (single panel)
+- Font: 10pt, bold for axis labels
+- Ticks: direction='in', on both sides, major length=6, minor length=3
+- Minor ticks: AutoMinorLocator(5) by default
+- Colors: viridis colormap (`get_viridis_colors(n)`)
+- Line width: 1
+- No legend by default (add only if needed)
