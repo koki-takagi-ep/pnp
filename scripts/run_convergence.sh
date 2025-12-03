@@ -11,7 +11,7 @@ echo ""
 echo "Test conditions:"
 echo "  - Bulk concentration: c0 = 0.001 mol/L"
 echo "  - Surface potential: phi0 = 50 mV"
-echo "  - Domain length: L = 100 nm"
+echo "  - Domain length: L = 50 nm"
 echo "  - Debye length: ~11.9 nm"
 echo "  - Grid: uniform (stretch=1.0)"
 echo ""
@@ -32,10 +32,10 @@ echo "--------------------------------------------"
 
 for N in 51 101 201 401 801 1601; do
     # Calculate grid spacing
-    dx=$(python3 -c "print(f'{100.0/($N-1):.4f}')")
+    dx=$(python3 -c "print(f'{50.0/($N-1):.4f}')")
 
     # Run solver
-    output=$(./build/pnp_solver --N $N --c0 0.001 --phi0 50 --stretch 1.0 --L 100 --output results/conv_${N}.dat 2>&1)
+    output=$(./build/pnp_solver --N $N --c0 0.001 --phi0 50 --stretch 1.0 --L 50 --output results/conv_${N}.dat 2>&1)
 
     # Extract errors
     L2=$(echo "$output" | grep "L2 error:" | head -1 | awk '{print $3}')
