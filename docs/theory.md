@@ -8,9 +8,10 @@
 2. [Poisson-Boltzmann方程式の導出](#poisson-boltzmann方程式の導出)
 3. [Gouy-Chapman解析解](#gouy-chapman解析解)
 4. [Bikermanモデル（Poisson-Fermi方程式）](#bikermanモデルpoisson-fermi方程式)
-5. [Modified Poisson-Fermi 方程式（将来拡張）](#modified-poisson-fermi-方程式将来拡張)
-6. [数値解法](#数値解法)
-7. [境界条件](#境界条件)
+5. [支配方程式と解析解のまとめ](#支配方程式と解析解のまとめ)
+6. [Modified Poisson-Fermi 方程式（将来拡張）](#modified-poisson-fermi-方程式将来拡張)
+7. [数値解法](#数値解法)
+8. [境界条件](#境界条件)
 
 ---
 
@@ -193,6 +194,49 @@ $$\frac{d^2 \psi}{d \xi^2} = \frac{\sinh(\psi)}{g(\psi)}$$
 - 非物理的な濃度 c > 1/(a³NA) を防止
 
 **参考文献**: Kilic, Bazant & Ajdari, *Phys. Rev. E* 75, 021502 (2007)
+
+### 表面電荷の解析解
+
+Bikerman 方程式を一度積分すると：
+
+$$\left(\frac{d\psi}{d\xi}\right)^2 = \frac{2}{\nu}\ln(1 - \nu + \nu\cosh\psi)$$
+
+これより表面電荷密度：
+
+$$\sigma = \sqrt{\frac{2\varepsilon k_B T c_0 N_A}{\nu}} \cdot \sqrt{\ln\left(1 + 2\nu\sinh^2\frac{\psi_0}{2}\right)}$$
+
+---
+
+## 支配方程式と解析解のまとめ
+
+本ソルバーで解いている方程式と、解析解の有無を整理する。
+
+### Standard Poisson-Boltzmann
+
+**支配方程式**（無次元形）：
+
+$$\frac{d^2\psi}{d\xi^2} = \sinh\psi$$
+
+| 物理量 | 解析解 | 式 |
+|--------|:------:|-----|
+| 電位分布 ψ(ξ) | ○ | $\tanh(\psi/4) = \tanh(\psi_0/4)\exp(-\xi)$ |
+| 表面電荷 σ | ○ | $\sigma = \sqrt{8\varepsilon k_B T c_0 N_A}\sinh(\psi_0/2)$ |
+
+### Bikerman（Poisson-Fermi）
+
+**支配方程式**（無次元形）：
+
+$$\frac{d^2\psi}{d\xi^2} = \frac{\sinh\psi}{1 - \nu + \nu\cosh\psi}$$
+
+| 物理量 | 解析解 | 備考 |
+|--------|:------:|------|
+| 電位分布 ψ(ξ) | × | 数値積分が必要 |
+| 表面電荷 σ | ○ | 第一積分から導出可能 |
+
+### 数値計算の意義
+
+- **Standard PB**: 解析解が存在するため、主にソルバー検証用
+- **Bikerman**: 空間分布 ψ(x), c±(x) を得るには数値計算が**必須**
 
 ---
 
