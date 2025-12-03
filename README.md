@@ -1028,7 +1028,7 @@ make run
 | `--phi-right <value>` | 右電極電位 [mV] | 0 |
 | `--c0 <value>` | バルク濃度 [mol/L] | 1.0 |
 | `--eps <value>` | 比誘電率 | 12 |
-| `--L <value>` | 計算領域長 [nm] | 100 |
+| `--L <value>` | 計算領域長 [nm] | 50 |
 | `--N <value>` | グリッド点数 | 1001 |
 | `--stretch <value>` | グリッドストレッチング係数 | 3.0 |
 | `--model <type>` | モデル種類（standard/bikerman） | standard |
