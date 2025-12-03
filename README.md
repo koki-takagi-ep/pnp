@@ -39,41 +39,33 @@ python3 scripts/plot_dual_electrode.py
 ### 電気二重層構造
 
 <div align="center">
-
-![Combined Results](results/combined_results.png)
+<img src="results/combined_results.png" width="500">
 
 *電位分布、濃度分布、空間電荷密度（c₀ = 1 M, φ₀ = 100 mV, L = 50 nm）*
-
 </div>
 
 ### 両電極モデル（キャパシタ）
 
 <div align="center">
-
-![Dual Electrode](results/dual_electrode.png?v=8)
+<img src="results/dual_electrode.png" width="500">
 
 *両電極構造における EDL（φ_L = 100 mV, φ_R = 0 mV, φ_bulk = 50 mV）*
-
 </div>
 
 ### 電圧-電荷特性
 
 <div align="center">
-
-![Voltage-Charge](results/voltage_charge.png?v=2)
+<img src="results/voltage_charge.png" width="500">
 
 *印加電圧と表面電荷密度の関係。低電圧で線形、高電圧で sinh 的増加。*
-
 </div>
 
 ### Standard PB vs Bikerman モデル
 
 <div align="center">
-
-![Voltage-Charge Comparison](results/voltage_charge_comparison.png?v=2)
+<img src="results/voltage_charge_comparison.png" width="600">
 
 *Standard PB（= Gouy-Chapman 解析解）は sinh 的に増加、Bikerman（有限イオンサイズ）は飽和。*
-
 </div>
 
 | 電圧 [mV] | Standard PB [μC/cm²] | Bikerman [μC/cm²] |
@@ -85,21 +77,17 @@ python3 scripts/plot_dual_electrode.py
 ### 格子収束性
 
 <div align="center">
-
-![Grid Convergence](results/grid_convergence.png)
+<img src="results/grid_convergence.png" width="500">
 
 *2次精度の収束を確認（平均収束次数: 2.00）*
-
 </div>
 
 ### 過渡解析（EDL形成過程）⚠️
 
 <div align="center">
-
-![EDL Evolution](results/edl_evolution.gif)
+<img src="results/edl_evolution.gif" width="600">
 
 *100 mV ステップ応答の時間発展（0〜200 ns）— 過渡ソルバは開発中*
-
 </div>
 
 ## コマンドラインオプション
