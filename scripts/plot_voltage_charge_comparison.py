@@ -23,7 +23,7 @@ def run_solver(phi0_mV, model='standard', ion_size=0.7):
         '--closed-system',
         '--c0', '1.0',
         '--L', '50',
-        '--N', '1001',
+        '--N', '4001',  # Increased for better accuracy at high voltages
         '--dual-electrode',
         '--model', model
     ]

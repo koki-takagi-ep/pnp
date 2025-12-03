@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / 'styles'))
 from plot_style import setup_plot_style, setup_axis_style, set_labels, FIGURE_SIZES
 
-def run_solver(phi0_mV, phi_right_mV=0, c0=1.0, L=50, N=1001):
+def run_solver(phi0_mV, phi_right_mV=0, c0=1.0, L=50, N=4001):
     """Run PNP solver and extract surface charge density."""
     cmd = [
         './build/pnp_solver',

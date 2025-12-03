@@ -2786,19 +2786,27 @@ std::pair<double, double> PNPSolver1D::compute_surface_charge() const {
     // Left electrode (outward normal = -x):  σ_L = -ε₀εᵣ(dφ/dx)|x=0
     // Right electrode (outward normal = +x): σ_R = +ε₀εᵣ(dφ/dx)|x=L
     //
-    // Use 2nd-order one-sided finite difference for accuracy
+    // Use 2nd-order 3-point Lagrange interpolation for non-uniform grids
 
-    // Left electrode: 2nd-order forward difference
-    // dφ/dx ≈ (-3φ₀ + 4φ₁ - φ₂) / (x₂ - x₀)
-    double dx_left = x_[2] - x_[0];
-    double dphi_dx_left = (-3.0 * phi_[0] + 4.0 * phi_[1] - phi_[2]) / dx_left;
+    // Left electrode: 3-point forward difference (Lagrange formula)
+    // For non-uniform grid with h1 = x[1]-x[0], h2 = x[2]-x[1]:
+    // dφ/dx|₀ = φ₀·(-(2h₁+h₂))/(h₁(h₁+h₂)) + φ₁·(h₁+h₂)/(h₁·h₂) + φ₂·(-h₁)/((h₁+h₂)h₂)
+    double h1_left = x_[1] - x_[0];
+    double h2_left = x_[2] - x_[1];
+    double dphi_dx_left = phi_[0] * (-(2.0*h1_left + h2_left)) / (h1_left * (h1_left + h2_left))
+                        + phi_[1] * (h1_left + h2_left) / (h1_left * h2_left)
+                        + phi_[2] * (-h1_left) / ((h1_left + h2_left) * h2_left);
     double sigma_left = -eps_ * dphi_dx_left;
 
-    // Right electrode: 2nd-order backward difference
-    // dφ/dx ≈ (3φₙ - 4φₙ₋₁ + φₙ₋₂) / (xₙ - xₙ₋₂)
+    // Right electrode: 3-point backward difference (Lagrange formula)
+    // For non-uniform grid with h1 = x[n-1]-x[n-2], h2 = x[n-2]-x[n-3]:
+    // dφ/dx|ₙ = φₙ·(2h₁+h₂)/(h₁(h₁+h₂)) + φₙ₋₁·(-(h₁+h₂))/(h₁·h₂) + φₙ₋₂·h₁/((h₁+h₂)h₂)
     int n = params_.N;
-    double dx_right = x_[n-1] - x_[n-3];
-    double dphi_dx_right = (3.0 * phi_[n-1] - 4.0 * phi_[n-2] + phi_[n-3]) / dx_right;
+    double h1_right = x_[n-1] - x_[n-2];
+    double h2_right = x_[n-2] - x_[n-3];
+    double dphi_dx_right = phi_[n-1] * (2.0*h1_right + h2_right) / (h1_right * (h1_right + h2_right))
+                         + phi_[n-2] * (-(h1_right + h2_right)) / (h1_right * h2_right)
+                         + phi_[n-3] * h1_right / ((h1_right + h2_right) * h2_right);
     double sigma_right = eps_ * dphi_dx_right;  // Note: positive sign for right electrode
 
     return std::make_pair(sigma_left, sigma_right);

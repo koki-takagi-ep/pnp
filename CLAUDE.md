@@ -41,6 +41,8 @@ bash scripts/run_comprehensive_convergence.sh  # Full parametric study
 | `--N <points>` | Grid points | 1001 |
 | `--stretch <factor>` | Grid stretching factor | 3.0 |
 
+**Note**: For high-voltage cases (> 200 mV) with c₀ = 1 M, use `--N 4001` for accurate surface charge calculation (< 3% error vs Gouy-Chapman).
+
 ## Architecture Overview
 
 This is a 1D Poisson-Nernst-Planck (PNP) solver for simulating electric double layers (EDL) in ionic liquids.
