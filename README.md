@@ -307,13 +307,15 @@ Newton 法で現れる連立一次方程式 J·δφ = -F は三重対角形式�
 
 #### Nernst-Planck 方程式の離散化
 
+**記号の定義**: 以下では数密度 n [m⁻³] を用いる。モル濃度 c [mol/L] との関係は n = c × N_A × 10³ である。
+
 Nernst-Planck 方程式は以下のフラックス形式で表される：
 
-$$\frac{\partial c}{\partial t} = -\nabla \cdot \mathbf{J}, \quad \mathbf{J} = -D\left( \nabla c + \frac{ze}{k_B T} c \nabla \phi \right)$$
+$$\frac{\partial n}{\partial t} = -\nabla \cdot \mathbf{J}, \quad \mathbf{J} = -D\left( \nabla n + \frac{ze}{k_B T} n \nabla \phi \right)$$
 
 これは次のように書き換えられる：
 
-$$\frac{\partial c}{\partial t} = \nabla \cdot \left[ D \left( \nabla c - v c \right) \right]$$
+$$\frac{\partial n}{\partial t} = \nabla \cdot \left[ D \left( \nabla n - v n \right) \right]$$
 
 ここで v = -ze∇φ / (k_BT) はドリフト速度を表す。
 
@@ -321,7 +323,7 @@ $$\frac{\partial c}{\partial t} = \nabla \cdot \left[ D \left( \nabla c - v c \r
 
 半導体デバイスシミュレーションで開発された **Scharfetter-Gummel (SG) スキーム**は、ドリフト-拡散方程式の数値解法として広く用いられている。このスキームは、セル界面 i+1/2 におけるフラックスを**指数フィッティング**により離散化する：
 
-$$J_{i+1/2} = \frac{D}{\Delta x_{i+1/2}} \left[ B(\eta_{i+1/2}) \, c_{i+1} - B(-\eta_{i+1/2}) \, c_i \right]$$
+$$J_{i+1/2} = \frac{D}{\Delta x_{i+1/2}} \left[ B(\eta_{i+1/2}) \, n_{i+1} - B(-\eta_{i+1/2}) \, n_i \right]$$
 
 ここで：
 - Δx_{i+1/2} = x_{i+1} - x_i
@@ -339,11 +341,11 @@ $$J_{i+1/2} = \frac{D}{\Delta x_{i+1/2}} \left[ B(\eta_{i+1/2}) \, c_{i+1} - B(-
 
 **SG スキームの導出**:
 
-セル [x_i, x_{i+1}] 内で定常フラックス J = -D(dc/dx - vc) = const を仮定すると、解析解は：
+セル [x_i, x_{i+1}] 内で定常フラックス J = -D(dn/dx - vn) = const を仮定すると、解析解は：
 
-$$c(x) = A e^{v(x - x_i)} + \frac{J}{Dv}$$
+$$n(x) = A e^{v(x - x_i)} + \frac{J}{Dv}$$
 
-境界条件 c(x_i) = c_i, c(x_{i+1}) = c_{i+1} を適用して J を求めると、SG フラックス公式が得られる。
+境界条件 n(x_i) = n_i, n(x_{i+1}) = n_{i+1} を適用して J を求めると、SG フラックス公式が得られる。
 
 **数値的安定性**:
 
@@ -354,13 +356,13 @@ SG スキームの特徴は、ドリフト優位（高 Péclet 数）でも拡�
 
 #### 陰的時間積分
 
-時間微分を後退 Euler 法で離散化：
+時間微分を後退 Euler 法で離散化（上付き添字 k は時間ステップを表す）：
 
-$$\frac{c_i^{n+1} - c_i^n}{\Delta t} = \frac{1}{\Delta x_i^{\text{avg}}} \left[ J_{i+1/2}^{n+1} - J_{i-1/2}^{n+1} \right]$$
+$$\frac{n_i^{k+1} - n_i^k}{\Delta t} = \frac{1}{\Delta x_i^{\text{avg}}} \left[ J_{i+1/2}^{k+1} - J_{i-1/2}^{k+1} \right]$$
 
 SG フラックスを代入すると、三重対角線形システムが得られる：
 
-$$a_i \, c_{i-1}^{n+1} + b_i \, c_i^{n+1} + d_i \, c_{i+1}^{n+1} = c_i^n$$
+$$a_i \, n_{i-1}^{k+1} + b_i \, n_i^{k+1} + d_i \, n_{i+1}^{k+1} = n_i^k$$
 
 係数は以下の通り：
 
@@ -376,32 +378,32 @@ $$b_i = 1 + \alpha_{i-1/2} \, B(-\eta_{i-1/2}) + \alpha_{i+1/2} \, B(-\eta_{i+1/
 
 PNP 方程式系は Poisson 方程式と Nernst-Planck 方程式が強く結合している。これを効率的に解くため、**Gummel 反復**（デカップリング反復）を用いる：
 
-**アルゴリズム（各時間ステップ n → n+1）**:
+**アルゴリズム（各時間ステップ）**:
 
 ```
-初期化: φ^(0) = φ^n, c_±^(0) = c_±^n
+初期化: φ^(0) = φ^{prev}, n_±^(0) = n_±^{prev}
 for k = 0, 1, 2, ... until convergence:
-    1. Poisson 求解: ∇²φ^(k+1) = -ρ(c_±^(k))/ε
-    2. NP 求解 (c+): 陰的 SG スキームで c_+^(k+1) を計算（φ^(k+1) 使用）
-    3. NP 求解 (c-): 陰的 SG スキームで c_-^(k+1) を計算（φ^(k+1) 使用）
-    4. 収束判定: ||c^(k+1) - c^(k)||_∞ / c_0 < ε_tol
-更新: φ^(n+1) = φ^(k+1), c_±^(n+1) = c_±^(k+1)
+    1. Poisson 求解: ∇²φ^(k+1) = -ρ(n_±^(k))/ε
+    2. NP 求解 (n+): 陰的 SG スキームで n_+^(k+1) を計算（φ^(k+1) 使用）
+    3. NP 求解 (n-): 陰的 SG スキームで n_-^(k+1) を計算（φ^(k+1) 使用）
+    4. 収束判定: ||n^(k+1) - n^(k)||_∞ / n_0 < ε_tol
+更新: φ^{new} = φ^(k+1), n_±^{new} = n_±^(k+1)
 ```
 
 **安定化技法**:
-- **緩和係数**: c^{(k+1)} ← ω·c^{(k+1)}_new + (1-ω)·c^{(k)}（ω = 0.5 を使用）
-- **正値性保証**: c ≥ 10⁻¹²c₀ を強制
+- **緩和係数**: n^{(k+1)} ← ω·n^{(k+1)}_new + (1-ω)·n^{(k)}（ω = 0.5 を使用）
+- **正値性保証**: n ≥ 10⁻¹²n₀ を強制
 
 #### 境界条件
 
-| 境界 | 電位 φ | 濃度 c |
-|------|--------|--------|
+| 境界 | 電位 φ | 数密度 n |
+|------|--------|----------|
 | 左端 (x = 0) | Dirichlet: φ = φ₀ | ゼロフラックス: J = 0（阻止電極） |
-| 右端 (x = L) | Dirichlet: φ = 0 | Dirichlet: c = c₀（バルク条件） |
+| 右端 (x = L) | Dirichlet: φ = 0 | Dirichlet: n = n₀（バルク条件） |
 
 左境界でのゼロフラックス条件は、SG スキームでは：
 
-$$J_{1/2} = \frac{D}{\Delta x_0} \left[ B(\eta_0) \, c_1 - B(-\eta_0) \, c_0 \right] = 0$$
+$$J_{1/2} = \frac{D}{\Delta x_0} \left[ B(\eta_0) \, n_1 - B(-\eta_0) \, n_0 \right] = 0$$
 
 これを離散化に組み込む。
 
@@ -426,6 +428,202 @@ $$\Delta t < \frac{\Delta x}{v_{\text{drift}}} = \frac{\Delta x \cdot k_B T}{D \
 - Scharfetter, D. L. & Gummel, H. K. (1969). Large-signal analysis of a silicon Read diode oscillator. *IEEE Trans. Electron Devices*, 16(1), 64-77.
 - Selberherr, S. (1984). *Analysis and Simulation of Semiconductor Devices*. Springer.
 - Bank, R. E. et al. (1983). Numerical methods for semiconductor device simulation. *SIAM J. Sci. Stat. Comput.*, 4(3), 416-435.
+
+### Scharfetter-Gummel スキームの詳細導出
+
+本節では、陰的 Scharfetter-Gummel (SG) スキームの完全な導出と実装詳細を述べる。
+
+#### 1. 連続問題からの出発
+
+1次元 Nernst-Planck 方程式：
+
+$$\frac{\partial n}{\partial t} = -\frac{\partial J}{\partial x}$$
+
+フラックス J は拡散項とドリフト項からなる：
+
+$$J = -D \left( \frac{\partial n}{\partial x} + \frac{ze}{k_B T} n \frac{\partial \phi}{\partial x} \right)$$
+
+#### 2. SG フラックスの厳密導出
+
+セル [x_i, x_{i+1}] 内で電場 E = -(φ_{i+1} - φ_i)/Δx が一定と仮定する。定常フラックス条件 J = const のもと、連続方程式は：
+
+$$J = -D \left( \frac{dn}{dx} + \frac{ze}{k_B T} n \frac{d\phi}{dx} \right) = -D \left( \frac{dn}{dx} - \frac{\eta}{\Delta x} n \right)$$
+
+ここで **無次元電位差** η を定義：
+
+$$\eta = \frac{ze (\phi_{i+1} - \phi_i)}{k_B T}$$
+
+この常微分方程式の一般解は：
+
+$$n(x) = A \exp\left( \frac{\eta (x - x_i)}{\Delta x} \right) + \frac{J \Delta x}{D \eta}$$
+
+境界条件 n(x_i) = n_i, n(x_{i+1}) = n_{i+1} を適用：
+
+$$n_i = A + \frac{J \Delta x}{D \eta}$$
+$$n_{i+1} = A e^{\eta} + \frac{J \Delta x}{D \eta}$$
+
+これを解くと：
+
+$$J = \frac{D}{\Delta x} \cdot \frac{\eta (n_i - n_{i+1} e^{-\eta})}{1 - e^{-\eta}} = \frac{D}{\Delta x} \left[ B(-\eta) n_{i+1} - B(\eta) n_i \right]$$
+
+ここで **Bernoulli 関数** B(η) = η/(e^η - 1) を用いた。
+
+**重要**: フラックス J は点 i から点 i+1 への方向（+x 方向）を正とする。上式では n_i の係数が負、n_{i+1} の係数が正となっている。
+
+#### 3. Bernoulli 関数の詳細
+
+Bernoulli 関数は以下の重要な性質を持つ：
+
+$$B(\eta) = \frac{\eta}{e^{\eta} - 1}$$
+
+**基本的性質**:
+
+| 性質 | 数式 | 証明/説明 |
+|------|------|-----------|
+| 正値性 | B(η) > 0 (∀η) | 分子と分母が同符号 |
+| 連続性 | B(0) = 1 | L'Hôpital の定理より |
+| 漸近性 | B(η) → 0 (η → +∞) | 指数関数が支配 |
+| 漸近性 | B(η) → \|η\| (η → -∞) | |
+| **相反関係** | B(-η) = B(η) + η | フラックス保存に重要 |
+
+**Taylor 展開**（η ≈ 0 での数値安定性のため）:
+
+$$B(\eta) = 1 - \frac{\eta}{2} + \frac{\eta^2}{12} - \frac{\eta^4}{720} + O(\eta^6)$$
+
+**実装での数値的注意**:
+- |η| < 10⁻⁸ の場合は Taylor 展開を使用（0除算回避）
+- |η| > 500 の場合は漸近形式を使用（オーバーフロー回避）
+
+#### 4. 陰的時間離散化の完全導出
+
+保存則を有限体積法で離散化する。セル i の体積平均数密度の時間発展：
+
+$$\frac{n_i^{k+1} - n_i^k}{\Delta t} = -\frac{J_{i+1/2}^{k+1} - J_{i-1/2}^{k+1}}{\Delta x_i^{\text{avg}}}$$
+
+ここで：
+- Δx_i^avg = (Δx_{i+1/2} + Δx_{i-1/2})/2（非一様格子対応）
+- J^{k+1} は時刻 k+1 で評価（陰的スキーム）
+- 上付き添字 k は時間ステップを表す（数密度 n と区別するため）
+
+**界面フラックス**:
+
+$$J_{i+1/2}^{k+1} = \frac{D}{\Delta x_{i+1/2}} \left[ B(-\eta_{i+1/2}) n_{i+1}^{k+1} - B(\eta_{i+1/2}) n_i^{k+1} \right]$$
+
+$$J_{i-1/2}^{k+1} = \frac{D}{\Delta x_{i-1/2}} \left[ B(-\eta_{i-1/2}) n_i^{k+1} - B(\eta_{i-1/2}) n_{i-1}^{k+1} \right]$$
+
+ここで：
+- η_{i+1/2} = ze(φ_{i+1} - φ_i)/(k_BT)
+- η_{i-1/2} = ze(φ_i - φ_{i-1})/(k_BT)
+
+**保存則への代入**:
+
+$$n_i^{k+1} - n_i^k = -\frac{\Delta t}{\Delta x_i^{\text{avg}}} \left[ J_{i+1/2}^{k+1} - J_{i-1/2}^{k+1} \right]$$
+
+展開すると：
+
+$$n_i^{k+1} = n_i^k + \alpha_{i+1/2} \left[ B(\eta_{i+1/2}) n_i^{k+1} - B(-\eta_{i+1/2}) n_{i+1}^{k+1} \right]$$
+$$\quad\quad\quad - \alpha_{i-1/2} \left[ B(\eta_{i-1/2}) n_{i-1}^{k+1} - B(-\eta_{i-1/2}) n_i^{k+1} \right]$$
+
+ここで α_{i±1/2} = D·Δt/(Δx_{i±1/2}·Δx_i^avg)。
+
+#### 5. 三重対角システムの行列形式
+
+整理すると以下の三重対角システムが得られる：
+
+$$\mathbf{A} \mathbf{n}^{k+1} = \mathbf{n}^k$$
+
+行列要素（内点 i = 1, ..., N-2）:
+
+$$a_i = -\alpha_{i-1/2} B(\eta_{i-1/2}) \quad \text{（下対角成分、n_{i-1} の係数）}$$
+
+$$b_i = 1 + \alpha_{i-1/2} B(-\eta_{i-1/2}) + \alpha_{i+1/2} B(\eta_{i+1/2}) \quad \text{（対角成分、n_i の係数）}$$
+
+$$d_i = -\alpha_{i+1/2} B(-\eta_{i+1/2}) \quad \text{（上対角成分、n_{i+1} の係数）}$$
+
+**行列構造**:
+
+```
+    | b_0   d_0   0     0    ...  0     0   |
+    | a_1   b_1   d_1   0    ...  0     0   |
+A = | 0     a_2   b_2   d_2  ...  0     0   |
+    | :     :     :     :    ...  :     :   |
+    | 0     0     0     0    ... a_{N-1} b_{N-1} |
+```
+
+**対角優位性**:
+
+陰的スキームの安定性には対角優位性 |b_i| ≥ |a_i| + |d_i| が必要。相反関係 B(-η) = B(η) + η を用いると：
+
+$$b_i = 1 + \alpha_{i-1/2}(B(\eta_{i-1/2}) + \eta_{i-1/2}) + \alpha_{i+1/2} B(\eta_{i+1/2})$$
+
+B(η) > 0 より b_i > 1 が保証され、a_i < 0, d_i < 0 と合わせて対角優位となる。
+
+#### 6. 境界条件の実装
+
+**左境界（x = 0）: ゼロフラックス条件**
+
+阻止電極では J_{-1/2} = 0。これは：
+
+$$B(-\eta_0) n_1 - B(\eta_0) n_0 = 0$$
+
+時間発展方程式は J_{1/2} のみを考慮：
+
+$$\frac{n_0^{k+1} - n_0^k}{\Delta t} = -\frac{J_{1/2}^{k+1}}{\Delta x_0}$$
+
+離散化：
+
+$$n_0^{k+1} \left[ 1 + \alpha_0 B(\eta_0) \right] - \alpha_0 B(-\eta_0) n_1^{k+1} = n_0^k$$
+
+よって：
+- b_0 = 1 + α_0 B(η_0)
+- d_0 = -α_0 B(-η_0)
+
+**右境界（x = L）: Dirichlet 条件**
+
+バルク数密度 n_{N-1} = n_0 を強制：
+- b_{N-1} = 1
+- rhs_{N-1} = n_0
+
+#### 7. 定常状態との整合性
+
+時間発展解が定常状態に収束するとき、∂n/∂t → 0 より J = const。
+
+ゼロフラックス条件 J = 0 のもとで：
+
+$$B(-\eta) n_{i+1} = B(\eta) n_i$$
+
+$$\frac{n_{i+1}}{n_i} = \frac{B(\eta)}{B(-\eta)} = \frac{B(\eta)}{B(\eta) + \eta} = \frac{1}{1 + \eta/B(\eta)}$$
+
+η → 0 では n_{i+1}/n_i → 1（一様分布）。
+
+厳密に計算すると：
+
+$$\frac{n_{i+1}}{n_i} = e^{-\eta} = \exp\left( -\frac{ze(\phi_{i+1} - \phi_i)}{k_B T} \right)$$
+
+これは **Boltzmann 分布** そのものであり、SG スキームが熱力学的平衡を正しく再現することを示す。
+
+#### 8. 実装における注意点
+
+1. **Bernoulli 関数の数値評価**:
+   ```cpp
+   double bernoulli(double eta) {
+       if (std::abs(eta) < 1e-8)
+           return 1.0 - eta/2.0 + eta*eta/12.0;  // Taylor展開
+       return eta / (std::exp(eta) - 1.0);
+   }
+   ```
+
+2. **非一様格子への対応**:
+   - α 係数に Δx_{i±1/2} と Δx_i^avg を正しく反映
+   - 界面での η は隣接点間の電位差から計算
+
+3. **正値性の保証**:
+   - 数密度が負になる場合は下限値（例: 10⁻¹² n_0）でクリップ
+   - 物理的に正の量を数値的に保証
+
+4. **収束判定**:
+   - Gummel 反復では相対誤差 ||Δn||_∞/n_0 < 10⁻⁸ を使用
+   - 各時間ステップで 2-5 回程度の反復で収束
 
 ## 検証結果
 

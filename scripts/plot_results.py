@@ -17,6 +17,7 @@ project_dir = script_dir.parent
 sys.path.insert(0, str(project_dir))
 
 from styles.plot_style import setup_plot_style, setup_axis_style, set_labels, FIGURE_SIZES
+from matplotlib.ticker import AutoMinorLocator
 
 
 def load_data(filename):
@@ -56,21 +57,28 @@ def plot_potential(data, output_dir):
     print("Saved: potential_profile.png/svg")
 
 
-def plot_concentrations(data, output_dir):
-    """Plot ion concentration profiles."""
+def plot_concentrations(data, output_dir, c0_mM=1.0):
+    """Plot ion concentration profiles (non-normalized, in mol/L)."""
     setup_plot_style()
     fig, ax = plt.subplots(figsize=FIGURE_SIZES['single'])
 
-    ax.plot(data['x_nm'], data['c_plus_norm'], 'r-', label=r'$c_+/c_0$ (cation)', linewidth=1)
-    ax.plot(data['x_nm'], data['c_minus_norm'], 'b-', label=r'$c_-/c_0$ (anion)', linewidth=1)
-    ax.axhline(y=1.0, color='gray', linestyle=':', linewidth=0.5)
+    # Convert from normalized to actual concentration (mol/L = M)
+    # c_plus and c_minus are already in mol/L from solver
+    ax.plot(data['x_nm'], data['c_plus'], 'r-', label=r'$n_+$ (cation)', linewidth=1)
+    ax.plot(data['x_nm'], data['c_minus'], 'b-', label=r'$n_-$ (anion)', linewidth=1)
 
-    set_labels(ax, r'$x$ (nm)', r'$c / c_0$')
+    set_labels(ax, r'$x$ (nm)', r'$n$ (mol/L)')
     ax.legend(loc='best', fontsize=8)
     ax.set_xlim([0, min(100, data['x_nm'].max())])
     ax.set_yscale('log')
 
-    setup_axis_style(ax)
+    # Apply axis style without minor locator for log scale
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    ax.xaxis.set_tick_params(which='major', direction='in', length=6, width=1)
+    ax.yaxis.set_tick_params(which='major', direction='in', length=6, width=1)
+    ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+
     plt.tight_layout()
     plt.savefig(output_dir / 'concentration_profiles.png', dpi=300, bbox_inches='tight')
     plt.savefig(output_dir / 'concentration_profiles.svg', bbox_inches='tight')
@@ -120,17 +128,21 @@ def plot_combined(data, output_dir):
     ax.set_xlim([0, min(100, data['x_nm'].max())])
     setup_axis_style(ax)
 
-    # (c) Concentrations
+    # (c) Concentrations (non-normalized)
     ax = axes[1, 0]
-    ax.plot(data['x_nm'], data['c_plus_norm'], 'r-', label=r'$c_+/c_0$', linewidth=1)
-    ax.plot(data['x_nm'], data['c_minus_norm'], 'b-', label=r'$c_-/c_0$', linewidth=1)
-    ax.axhline(y=1.0, color='gray', linestyle=':', linewidth=0.5)
-    set_labels(ax, r'$x$ (nm)', r'$c / c_0$')
+    ax.plot(data['x_nm'], data['c_plus'], 'r-', label=r'$n_+$', linewidth=1)
+    ax.plot(data['x_nm'], data['c_minus'], 'b-', label=r'$n_-$', linewidth=1)
+    set_labels(ax, r'$x$ (nm)', r'$n$ (mol/L)')
     ax.set_title('(c) Ion Concentrations', fontsize=10, fontweight='bold')
     ax.legend(loc='best', fontsize=8)
     ax.set_xlim([0, min(100, data['x_nm'].max())])
     ax.set_yscale('log')
-    setup_axis_style(ax)
+    # Axis style without minor locator for log y-scale
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    ax.xaxis.set_tick_params(which='major', direction='in', length=6, width=1)
+    ax.yaxis.set_tick_params(which='major', direction='in', length=6, width=1)
+    ax.xaxis.set_minor_locator(AutoMinorLocator(5))
 
     # (d) Charge density
     ax = axes[1, 1]

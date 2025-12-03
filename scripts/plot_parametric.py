@@ -8,29 +8,18 @@ This script generates comparison plots for different:
 """
 
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
 from pathlib import Path
 import sys
 
-# Configure matplotlib for publication-quality figures
-plt.rcParams.update({
-    'font.family': 'serif',
-    'font.size': 12,
-    'axes.labelsize': 14,
-    'axes.titlesize': 14,
-    'legend.fontsize': 10,
-    'xtick.labelsize': 12,
-    'ytick.labelsize': 12,
-    'lines.linewidth': 2,
-    'lines.markersize': 6,
-    'figure.figsize': (8, 6),
-    'figure.dpi': 150,
-    'savefig.dpi': 300,
-    'savefig.bbox': 'tight',
-    'axes.grid': True,
-    'grid.alpha': 0.3,
-    'axes.axisbelow': True,
-})
+# Add project root to path for styles import
+script_dir = Path(__file__).parent
+project_dir = script_dir.parent
+sys.path.insert(0, str(project_dir))
+
+from styles.plot_style import setup_plot_style, setup_axis_style, set_labels, FIGURE_SIZES
 
 
 def load_data(filename):
@@ -52,10 +41,11 @@ def load_data(filename):
 
 def plot_potential_comparison(results_dir):
     """Compare potential profiles for different surface potentials."""
+    setup_plot_style()
     potentials = [25, 50, 100, 200]
     colors = plt.cm.viridis(np.linspace(0.2, 0.9, len(potentials)))
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, ax = plt.subplots(figsize=FIGURE_SIZES['single'])
 
     for phi0, color in zip(potentials, colors):
         filename = results_dir / f'pnp_phi{phi0}mV.dat'
@@ -66,38 +56,29 @@ def plot_potential_comparison(results_dir):
         data = load_data(filename)
 
         # Absolute potential
-        axes[0].plot(data['x_norm'], data['phi_mV'], color=color,
-                     label=f'{phi0} mV', linewidth=2)
+        ax.plot(data['x_norm'], data['phi_mV'], color=color,
+                label=f'{phi0} mV', linewidth=1)
 
-        # Normalized potential
-        axes[1].plot(data['x_norm'], data['phi_mV'] / phi0, color=color,
-                     label=f'{phi0} mV', linewidth=2)
-
-    axes[0].set_xlabel(r'$x / \lambda_D$')
-    axes[0].set_ylabel(r'$\phi$ [mV]')
-    axes[0].set_title('(a) Electric Potential')
-    axes[0].legend(title='Surface potential')
-    axes[0].set_xlim([0, 10])
-
-    axes[1].set_xlabel(r'$x / \lambda_D$')
-    axes[1].set_ylabel(r'$\phi / \phi_0$')
-    axes[1].set_title('(b) Normalized Potential')
-    axes[1].legend(title='Surface potential')
-    axes[1].set_xlim([0, 10])
+    set_labels(ax, r'$x / \lambda_D$', r'$\phi$ (mV)')
+    ax.legend(loc='best', fontsize=8)
+    ax.set_xlim([0, 10])
+    setup_axis_style(ax)
 
     plt.tight_layout()
-    plt.savefig(results_dir / 'parametric_potential.png')
-    plt.savefig(results_dir / 'parametric_potential.pdf')
+    plt.savefig(results_dir / 'parametric_potential.png', dpi=300, bbox_inches='tight')
+    plt.savefig(results_dir / 'parametric_potential.svg', bbox_inches='tight')
     plt.close()
-    print("Saved: parametric_potential.png/pdf")
+    print("Saved: parametric_potential.png/svg")
 
 
 def plot_concentration_comparison(results_dir):
-    """Compare concentration profiles for different surface potentials."""
+    """Compare concentration profiles for different surface potentials (non-normalized)."""
+    setup_plot_style()
     potentials = [25, 50, 100, 200]
     colors = plt.cm.viridis(np.linspace(0.2, 0.9, len(potentials)))
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    # Cation concentration plot
+    fig, ax = plt.subplots(figsize=FIGURE_SIZES['single'])
 
     for phi0, color in zip(potentials, colors):
         filename = results_dir / f'pnp_phi{phi0}mV.dat'
@@ -105,43 +86,54 @@ def plot_concentration_comparison(results_dir):
             continue
 
         data = load_data(filename)
+        ax.plot(data['x_norm'], data['c_plus'], color=color,
+                label=f'{phi0} mV', linewidth=1)
 
-        # Cation concentration
-        axes[0].plot(data['x_norm'], data['c_plus_norm'], color=color,
-                     label=f'{phi0} mV', linewidth=2)
-
-        # Anion concentration
-        axes[1].plot(data['x_norm'], data['c_minus_norm'], color=color,
-                     label=f'{phi0} mV', linewidth=2)
-
-    for ax in axes:
-        ax.axhline(y=1.0, color='gray', linestyle=':', linewidth=1)
-        ax.set_xlabel(r'$x / \lambda_D$')
-        ax.set_xlim([0, 10])
-        ax.set_yscale('log')
-
-    axes[0].set_ylabel(r'$c_+ / c_0$')
-    axes[0].set_title('(a) Cation Concentration')
-    axes[0].legend(title='Surface potential')
-
-    axes[1].set_ylabel(r'$c_- / c_0$')
-    axes[1].set_title('(b) Anion Concentration')
-    axes[1].legend(title='Surface potential')
+    set_labels(ax, r'$x / \lambda_D$', r'$n_+$ (mol/L)')
+    ax.legend(loc='best', fontsize=8)
+    ax.set_xlim([0, 10])
+    ax.set_yscale('log')
+    setup_axis_style(ax)
 
     plt.tight_layout()
-    plt.savefig(results_dir / 'parametric_concentration.png')
-    plt.savefig(results_dir / 'parametric_concentration.pdf')
+    plt.savefig(results_dir / 'parametric_cation.png', dpi=300, bbox_inches='tight')
+    plt.savefig(results_dir / 'parametric_cation.svg', bbox_inches='tight')
     plt.close()
-    print("Saved: parametric_concentration.png/pdf")
+    print("Saved: parametric_cation.png/svg")
+
+    # Anion concentration plot
+    fig, ax = plt.subplots(figsize=FIGURE_SIZES['single'])
+
+    for phi0, color in zip(potentials, colors):
+        filename = results_dir / f'pnp_phi{phi0}mV.dat'
+        if not filename.exists():
+            continue
+
+        data = load_data(filename)
+        ax.plot(data['x_norm'], data['c_minus'], color=color,
+                label=f'{phi0} mV', linewidth=1)
+
+    set_labels(ax, r'$x / \lambda_D$', r'$n_-$ (mol/L)')
+    ax.legend(loc='best', fontsize=8)
+    ax.set_xlim([0, 10])
+    ax.set_yscale('log')
+    setup_axis_style(ax)
+
+    plt.tight_layout()
+    plt.savefig(results_dir / 'parametric_anion.png', dpi=300, bbox_inches='tight')
+    plt.savefig(results_dir / 'parametric_anion.svg', bbox_inches='tight')
+    plt.close()
+    print("Saved: parametric_anion.png/svg")
 
 
 def plot_bulk_concentration_effect(results_dir):
     """Compare results for different bulk concentrations."""
+    setup_plot_style()
     concentrations = [0.1, 1.0, 5.0]
     labels = ['0.1 M', '1.0 M', '5.0 M']
     colors = ['blue', 'green', 'red']
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, ax = plt.subplots(figsize=FIGURE_SIZES['single'])
 
     for c0, label, color in zip(concentrations, labels, colors):
         filename = results_dir / f'pnp_c0_{c0}M.dat'
@@ -152,39 +144,29 @@ def plot_bulk_concentration_effect(results_dir):
         data = load_data(filename)
 
         # Potential vs distance in nm
-        axes[0].plot(data['x_nm'], data['phi_mV'], color=color,
-                     label=label, linewidth=2)
+        ax.plot(data['x_nm'], data['phi_mV'], color=color,
+                label=label, linewidth=1)
 
-        # Potential vs normalized distance
-        axes[1].plot(data['x_norm'], data['phi_mV'], color=color,
-                     label=label, linewidth=2)
-
-    axes[0].set_xlabel(r'$x$ [nm]')
-    axes[0].set_ylabel(r'$\phi$ [mV]')
-    axes[0].set_title('(a) Potential vs. Distance')
-    axes[0].legend(title='Concentration')
-    axes[0].set_xlim([0, 50])
-
-    axes[1].set_xlabel(r'$x / \lambda_D$')
-    axes[1].set_ylabel(r'$\phi$ [mV]')
-    axes[1].set_title('(b) Potential vs. Normalized Distance')
-    axes[1].legend(title='Concentration')
-    axes[1].set_xlim([0, 10])
+    set_labels(ax, r'$x$ (nm)', r'$\phi$ (mV)')
+    ax.legend(loc='best', fontsize=8)
+    ax.set_xlim([0, 50])
+    setup_axis_style(ax)
 
     plt.tight_layout()
-    plt.savefig(results_dir / 'parametric_bulk_concentration.png')
-    plt.savefig(results_dir / 'parametric_bulk_concentration.pdf')
+    plt.savefig(results_dir / 'parametric_bulk_concentration.png', dpi=300, bbox_inches='tight')
+    plt.savefig(results_dir / 'parametric_bulk_concentration.svg', bbox_inches='tight')
     plt.close()
-    print("Saved: parametric_bulk_concentration.png/pdf")
+    print("Saved: parametric_bulk_concentration.png/svg")
 
 
 def plot_debye_screening(results_dir):
     """Illustrate Debye screening effect."""
+    setup_plot_style()
     concentrations = [0.1, 1.0, 5.0]
     labels = ['0.1 M', '1.0 M', '5.0 M']
     colors = ['blue', 'green', 'red']
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=FIGURE_SIZES['single'])
 
     for c0, label, color in zip(concentrations, labels, colors):
         filename = results_dir / f'pnp_c0_{c0}M.dat'
@@ -196,25 +178,22 @@ def plot_debye_screening(results_dir):
         # Plot normalized potential on semilog
         mask = data['phi_mV'] > 0.1  # Avoid log(0) issues
         ax.semilogy(data['x_nm'][mask], data['phi_mV'][mask], color=color,
-                    label=label, linewidth=2)
+                    label=label, linewidth=1)
 
-    ax.set_xlabel(r'$x$ [nm]')
-    ax.set_ylabel(r'$\phi$ [mV]')
-    ax.set_title('Debye Screening Effect')
-    ax.legend(title='Concentration')
+    set_labels(ax, r'$x$ (nm)', r'$\phi$ (mV)')
+    ax.legend(loc='best', fontsize=8)
     ax.set_xlim([0, 50])
+    setup_axis_style(ax)
 
     plt.tight_layout()
-    plt.savefig(results_dir / 'debye_screening.png')
-    plt.savefig(results_dir / 'debye_screening.pdf')
+    plt.savefig(results_dir / 'debye_screening.png', dpi=300, bbox_inches='tight')
+    plt.savefig(results_dir / 'debye_screening.svg', bbox_inches='tight')
     plt.close()
-    print("Saved: debye_screening.png/pdf")
+    print("Saved: debye_screening.png/svg")
 
 
 def main():
     # Setup paths
-    script_dir = Path(__file__).parent
-    project_dir = script_dir.parent
     results_dir = project_dir / 'results'
 
     if not results_dir.exists():
