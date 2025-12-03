@@ -19,7 +19,7 @@ void print_usage(const char* program_name) {
               << "  --phi-right <value> Right electrode potential in mV (default: 0)\n"
               << "  --c0 <value>        Bulk concentration in mol/L (default: 1.0)\n"
               << "  --eps <value>       Relative permittivity (default: 12)\n"
-              << "  --L <value>         Domain length in nm (default: 100)\n"
+              << "  --L <value>         Domain length in nm (default: 50)\n"
               << "  --N <value>         Number of grid points (default: 1001)\n"
               << "  --output <file>     Output filename (default: results/pnp_results.dat)\n"
               << "  --model <type>      Model type: standard or bikerman (default: standard)\n"
@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
     double phi_right_mV = 0.0;    // Right electrode potential [mV]
     double c0_molL = 1.0;         // Bulk concentration [mol/L]
     double eps_r = 12.0;          // Relative permittivity
-    double L_nm = 100.0;          // Domain length [nm]
+    double L_nm = 50.0;           // Domain length [nm]
     int N = 1001;                 // Grid points
     std::string output_file = "results/pnp_results.dat";
     std::string model_type = "standard";  // Model type: standard or bikerman

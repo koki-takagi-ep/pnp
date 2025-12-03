@@ -47,7 +47,7 @@ def plot_potential(data, output_dir):
 
     set_labels(ax, r'$x$ (nm)', r'$\phi$ (mV)')
     ax.legend(loc='best', fontsize=8)
-    ax.set_xlim([0, min(100, data['x_nm'].max())])
+    ax.set_xlim([0, min(50, data['x_nm'].max())])
 
     setup_axis_style(ax)
     plt.tight_layout()
@@ -69,7 +69,7 @@ def plot_concentrations(data, output_dir, c0_mM=1.0):
 
     set_labels(ax, r'$x$ (nm)', r'$n$ (mol/L)')
     ax.legend(loc='best', fontsize=8)
-    ax.set_xlim([0, min(100, data['x_nm'].max())])
+    ax.set_xlim([0, min(50, data['x_nm'].max())])
     ax.set_yscale('log')
 
     # Apply axis style without minor locator for log scale
@@ -95,7 +95,7 @@ def plot_charge_density(data, output_dir):
     ax.axhline(y=0, color='gray', linestyle=':', linewidth=0.5)
 
     set_labels(ax, r'$x$ (nm)', r'$\rho$ (MC/m$^3$)')
-    ax.set_xlim([0, min(100, data['x_nm'].max())])
+    ax.set_xlim([0, min(50, data['x_nm'].max())])
 
     setup_axis_style(ax)
     plt.tight_layout()
@@ -117,7 +117,7 @@ def plot_combined(data, output_dir):
     set_labels(ax, r'$x$ (nm)', r'$\phi$ (mV)')
     ax.set_title('(a) Electric Potential', fontsize=10, fontweight='bold')
     ax.legend(loc='best', fontsize=8)
-    ax.set_xlim([0, min(100, data['x_nm'].max())])
+    ax.set_xlim([0, min(50, data['x_nm'].max())])
     setup_axis_style(ax)
 
     # (b) Normalized potential
@@ -125,7 +125,7 @@ def plot_combined(data, output_dir):
     ax.plot(data['x_nm'], data['phi_norm'], 'b-', linewidth=1)
     set_labels(ax, r'$x$ (nm)', r'$e\phi / k_B T$')
     ax.set_title('(b) Normalized Potential', fontsize=10, fontweight='bold')
-    ax.set_xlim([0, min(100, data['x_nm'].max())])
+    ax.set_xlim([0, min(50, data['x_nm'].max())])
     setup_axis_style(ax)
 
     # (c) Concentrations (non-normalized)
@@ -135,7 +135,7 @@ def plot_combined(data, output_dir):
     set_labels(ax, r'$x$ (nm)', r'$n$ (mol/L)')
     ax.set_title('(c) Ion Concentrations', fontsize=10, fontweight='bold')
     ax.legend(loc='best', fontsize=8)
-    ax.set_xlim([0, min(100, data['x_nm'].max())])
+    ax.set_xlim([0, min(50, data['x_nm'].max())])
     ax.set_yscale('log')
     # Axis style without minor locator for log y-scale
     ax.xaxis.set_ticks_position('both')
@@ -150,7 +150,7 @@ def plot_combined(data, output_dir):
     ax.axhline(y=0, color='gray', linestyle=':', linewidth=0.5)
     set_labels(ax, r'$x$ (nm)', r'$\rho$ (MC/m$^3$)')
     ax.set_title('(d) Space Charge Density', fontsize=10, fontweight='bold')
-    ax.set_xlim([0, min(100, data['x_nm'].max())])
+    ax.set_xlim([0, min(50, data['x_nm'].max())])
     setup_axis_style(ax)
 
     plt.tight_layout()
@@ -202,7 +202,7 @@ def plot_error_analysis(data, output_dir):
             verticalalignment='top', horizontalalignment='right', bbox=props)
 
     set_labels(ax, r'$x$ (nm)', r'$|\phi_{PNP} - \phi_{GC}|$ (mV)')
-    ax.set_xlim([0, min(100, data['x_nm'].max())])
+    ax.set_xlim([0, min(50, data['x_nm'].max())])
 
     setup_axis_style(ax)
     plt.tight_layout()
