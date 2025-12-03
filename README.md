@@ -9,7 +9,7 @@ Poisson-Nernst-Planck (PNP) 方程式を用いて、帯電した界面近傍の�
 ### 主な機能
 
 - **定常解析**: Newton-Raphson法による Poisson-Boltzmann 方程式の求解
-- **過渡解析**: Scharfetter-Gummel スキームによる時間発展計算
+- **過渡解析**: Scharfetter-Gummel スキーム（⚠️ 開発中・不安定）
 - **Bikerman モデル**: 有限イオンサイズによる立体効果
 - **両電極モデル**: キャパシタ構造（closed system）のシミュレーション
 - **非一様グリッド**: 界面付近にグリッドを集中配置
@@ -70,9 +70,9 @@ python3 scripts/plot_dual_electrode.py
 
 <div align="center">
 
-![Voltage-Charge Comparison](results/voltage_charge_comparison.png?v=1)
+![Voltage-Charge Comparison](results/voltage_charge_comparison.png?v=2)
 
-*Standard PB（点電荷）は増加し続けるが、Bikerman（有限イオンサイズ）は飽和。*
+*Standard PB（= Gouy-Chapman 解析解）は sinh 的に増加、Bikerman（有限イオンサイズ）は飽和。*
 
 </div>
 
@@ -92,13 +92,13 @@ python3 scripts/plot_dual_electrode.py
 
 </div>
 
-### 過渡解析（EDL形成過程）
+### 過渡解析（EDL形成過程）⚠️
 
 <div align="center">
 
 ![EDL Evolution](results/edl_evolution.gif)
 
-*100 mV ステップ応答の時間発展（0〜200 ns）*
+*100 mV ステップ応答の時間発展（0〜200 ns）— 過渡ソルバは開発中*
 
 </div>
 
@@ -117,9 +117,6 @@ python3 scripts/plot_dual_electrode.py
 | `--dual-electrode` | 両電極用対称グリッド | off |
 | `--model <type>` | standard / bikerman | standard |
 | `--ion-size <nm>` | イオン直径（Bikerman用） | 0.7 |
-| `--gummel` | Gummel反復による過渡解析 | off |
-| `--dt <ns>` | 時間刻み | 0.1 |
-| `--t-final <μs>` | 終了時間 | 1.0 |
 | `--output <file>` | 出力ファイル名 | results/pnp_results.dat |
 
 ## 出力データ
