@@ -95,9 +95,9 @@ python3 scripts/plot_dual_electrode.py
 ### 格子収束性（Bikerman）
 
 <div align="center">
-<img src="results/bikerman_convergence.png" width="500">
+<img src="results/bikerman_convergence_full.png" width="600">
 
-*Bikerman: 解析解との比較で2次精度を確認（平均収束次数: 1.97）*
+*Bikerman: (a) 表面電荷 vs 解析解、(b) L2誤差（Richardson外挿）。両者とも2次精度。*
 </div>
 
 ### 過渡解析（EDL形成過程）⚠️
