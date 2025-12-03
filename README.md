@@ -84,12 +84,20 @@ python3 scripts/plot_dual_electrode.py
 *Bikerman モデルでは crowding 効果により表面濃度が制限される（c₋/c₀ ≈ 3.4 vs 7.0）*
 </div>
 
-### 格子収束性
+### 格子収束性（Standard PB）
 
 <div align="center">
 <img src="results/grid_convergence.png" width="500">
 
-*2次精度の収束を確認（平均収束次数: 2.00）*
+*Standard PB: 2次精度の収束を確認（平均収束次数: 2.00）*
+</div>
+
+### 格子収束性（Bikerman）
+
+<div align="center">
+<img src="results/bikerman_convergence.png" width="500">
+
+*Bikerman: 解析解との比較で2次精度を確認（平均収束次数: 1.97）*
 </div>
 
 ### 過渡解析（EDL形成過程）⚠️
