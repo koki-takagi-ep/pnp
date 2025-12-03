@@ -12,10 +12,8 @@ make clean        # Clean build artifacts
 # Run with specific options
 ./build/pnp_solver --phi0 100 --phi-right 0 --closed-system --c0 1.0
 
-# Transient solvers
-./build/pnp_solver --gummel --dt 0.01 --t-final 0.2    # Gummel iteration
-./build/pnp_solver --slotboom --dt 0.01 --t-final 0.2  # Slotboom transformation
-./build/pnp_solver --shenxu --dt 0.01 --t-final 0.2    # Shen-Xu positivity-preserving
+# Transient solvers (⚠️ unstable - use continuation only for pseudo-transient)
+./build/pnp_solver --continuation 50    # Pseudo-transient (stable, reaches steady-state)
 
 # Bikerman model (steric effects)
 ./build/pnp_solver --model bikerman --ion-size 0.7
@@ -50,9 +48,11 @@ This is a 1D Poisson-Nernst-Planck (PNP) solver for simulating electric double l
 ### Core Components
 
 **Solver (`src/pnp_solver.cpp`, `include/pnp_solver.hpp`)**:
-- `PNPSolver1D` class: Main solver with Newton-Raphson for steady-state and multiple transient schemes
+- `PNPSolver1D` class: Main solver with Newton-Raphson for steady-state
 - `solve()`: Steady-state Poisson-Boltzmann with optional charge neutrality constraint (closed system)
-- `solve_transient_*()`: Various transient solvers (Gummel, Slotboom, Shen-Xu schemes)
+- `compute_surface_charge()`: Returns (σ_left, σ_right) in C/m² using Gauss's law
+- `compute_capacitance()`: Returns differential capacitance of each EDL
+- `solve_transient_*()`: Various transient solvers (⚠️ numerically unstable, not production-ready)
 
 **Key Physical Concepts**:
 - **Open system**: Right boundary at bulk concentration (Dirichlet c=c₀)
@@ -114,7 +114,8 @@ Non-uniform grid with tanh-stretching near electrodes:
 - `scripts/plot_*.py`: Visualization scripts
 - `styles/`: Plot style utilities (see below)
 - `results/`: Output data (.dat) and figures (.png)
-- `docs/`: Reference papers (PDF)
+- `docs/theory.md`: Mathematical derivations (PNP, Gouy-Chapman, Bikerman)
+- `docs/validation.md`: Grid convergence and parametric validation results
 
 ## Notation Convention
 
@@ -154,3 +155,12 @@ plt.tight_layout()
 - Line width: 1
 - No legend by default (add only if needed)
 - All plots must be square format
+
+## Solver Status
+
+| Feature | Status | Notes |
+|---------|:------:|-------|
+| Steady-state (Newton-Raphson) | ✅ | Production-ready, 2nd-order accurate |
+| Bikerman model | ✅ | Steric effects for finite ion size |
+| Surface charge/capacitance | ✅ | Gauss's law at boundaries |
+| Transient solvers | ❌ | Numerically unstable, under development |
