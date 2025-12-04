@@ -14,6 +14,8 @@ Poisson-Nernst-Planck (PNP) 方程式を用いて、帯電した界面近傍の�
 - **両電極モデル**: キャパシタ構造（closed system）のシミュレーション
 - **非一様グリッド**: 界面付近にグリッドを集中配置
 
+> 📖 **詳細ドキュメント**: [docs/README_full.md](docs/README_full.md) | [理論](docs/theory.md) | [検証結果](docs/validation.md)
+
 ## クイックスタート
 
 ```bash
@@ -51,6 +53,14 @@ python3 scripts/plot_dual_electrode.py
 
 *両電極構造における EDL（φ_L = 100 mV, φ_R = 0 mV, φ_bulk = 50 mV）*
 </div>
+
+| 位置 | 電位 [mV] | c₊/c₀ | c₋/c₀ |
+|:-----|----------:|------:|------:|
+| 左端 (x = 0) | 100.0 | 0.14 | 7.03 |
+| バルク (x = L/2) | 50.0 | 1.00 | 1.00 |
+| 右端 (x = L) | 0.0 | 7.03 | 0.14 |
+
+**物理的解釈**: 左電極（+100 mV）ではアニオンが蓄積（c₋/c₀ ≈ 7）、右電極（0 mV）ではカチオンが蓄積。バルクでは電気的中性が保たれる。濃度比 exp(±50 mV / 25.7 mV) ≈ 7.0 は Boltzmann 分布と一致。
 
 ### 格子点位置の可視化
 
@@ -187,7 +197,7 @@ pnp/
 
 ## 理論背景
 
-詳細な数学的導出は [docs/theory.md](docs/theory.md) を参照。
+詳細な数学的導出は [docs/theory.md](docs/theory.md) を参照。検証結果は [docs/validation.md](docs/validation.md) を参照。
 
 ### 支配方程式
 
