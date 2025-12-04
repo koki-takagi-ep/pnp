@@ -50,12 +50,13 @@ def main():
     ax1.plot(bik['x'][mask_bik], bik['c_plus'][mask_bik], '--', color='C1',
              linewidth=1, alpha=0.5)
 
-    # Add horizontal line for Bikerman max concentration
-    # max = 1/ν where ν = 2a³c₀NA, for a=0.7nm, c₀=1M: ν≈0.41, so max≈2.4
+    # Add horizontal line for Bikerman asymptotic max concentration
+    # As ψ→∞, c/c₀ → 2/ν where ν = 2a³c₀NA
+    # For a=0.7nm, c₀=1M: ν≈0.413, so max≈4.84
     nu = 0.413  # packing fraction from solver output
-    c_max = 1.0 / nu
+    c_max = 2.0 / nu
     ax1.axhline(y=c_max, color='gray', linestyle=':', linewidth=1,
-                label=f'Max ($1/\\nu = {c_max:.1f}$)')
+                label=f'$c_{{\\max}}/c_0 = 2/\\nu$ = {c_max:.1f}')
 
     set_labels(ax1, r'$x$ (nm)', r'$n/n_0$')
     setup_axis_style(ax1)

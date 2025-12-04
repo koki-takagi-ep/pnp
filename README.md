@@ -94,13 +94,21 @@ python3 scripts/plot_dual_electrode.py
 
 *N = 4001 で計算。Standard PB と Gouy-Chapman の誤差は 300 mV でも 2.3% 以内。*
 
-### 濃度分布の比較
+### 濃度分布の比較（Standard PB vs Bikerman）
 
 <div align="center">
 <img src="results/model_comparison.png" width="600">
-
-*Bikerman モデルでは crowding 効果により表面濃度が制限される（c₋/c₀ ≈ 3.4 vs 7.0）*
 </div>
+
+**左パネル**: 左電極近傍（x = 0〜2 nm）のイオン濃度分布
+- **青実線**: Standard PB のアニオン濃度 n₋/n₀（表面で ≈ 7.0）
+- **橙破線**: Bikerman のアニオン濃度 n₋/n₀（表面で ≈ 3.4）
+- **薄い線**: カチオン濃度 n₊/n₀（表面で ≈ 0.14）
+- **灰点線**: Bikerman 理論的最大値 c_max/c₀ = 2/ν ≈ 4.8（ψ→∞ の漸近値）
+
+**右パネル**: 電位分布 φ(x)。両モデルでほぼ同一（バルク電位 = 50 mV）。
+
+**物理的解釈**: Standard PB では Boltzmann 分布 exp(eφ/k_BT) に従い濃度が発散しうるが、Bikerman モデルでは有限イオンサイズ（a = 0.7 nm）による crowding 効果で濃度が制限される。
 
 ### 格子収束性（Standard PB）
 
