@@ -201,29 +201,47 @@ pnp/
 
 ### 支配方程式
 
-**Poisson 方程式**:
-$$\nabla^2 \phi = -\frac{e}{\varepsilon}(z_+ c_+ + z_- c_-)$$
+| 方程式 | 数式 | 役割 |
+|--------|------|------|
+| **Poisson** | $\nabla^2 \phi = -\frac{e}{\varepsilon}(z_+ c_+ + z_- c_-)$ | 電位分布 |
+| **Nernst-Planck** | $\mathbf{J}_i = -D_i \left( \nabla c_i + \frac{z_i e c_i}{k_B T} \nabla \phi \right)$ | イオン輸送 |
+| **連続の式** | $\frac{\partial c_i}{\partial t} = -\nabla \cdot \mathbf{J}_i$ | 質量保存 |
 
-**Nernst-Planck 方程式**:
-$$\mathbf{J}_i = -D_i \left( \nabla c_i + \frac{z_i e c_i}{k_B T} \nabla \phi \right)$$
+### 解析解（検証用）
 
-**Poisson-Boltzmann 方程式**（定常状態）:
-$$\frac{d^2 \phi}{d x^2} = \frac{2 e N_A c_0}{\varepsilon} \sinh\left( \frac{e \phi}{k_B T} \right)$$
+| モデル | 支配方程式 | 解析解 |
+|--------|-----------|--------|
+| **Standard PB** | $\frac{d^2 \phi}{d x^2} = \frac{2 e N_A c_0}{\varepsilon} \sinh\left( \frac{e \phi}{k_B T} \right)$ | Gouy-Chapman: $\tanh\left(\frac{\psi}{4}\right) = \tanh\left(\frac{\psi_0}{4}\right) e^{-x/\lambda_D}$ |
+| **Bikerman** | 同上 + 立体効果 | 表面電荷: $\sigma = \sqrt{2\varepsilon k_B T c_0 N_A} \cdot \frac{2}{\sqrt{\nu}} \sinh^{-1}\left(\sqrt{\nu} \sinh\frac{\psi_0}{2}\right)$ |
+
+**Standard PB の導出**: 定常状態（∂c/∂t = 0）かつゼロフラックス（J = 0）条件下で、Nernst-Planck 方程式を積分すると Boltzmann 分布 $c_\pm = c_0 \exp(\mp e\phi/k_B T)$ が得られる。これを Poisson 方程式に代入して PB 方程式を得る。
+
+### 数値解法
+
+| 解法 | 離散化 | 適用 |
+|------|--------|------|
+| **定常（Newton-Raphson）** | 2階中心差分、非一様グリッド | Poisson-Boltzmann 方程式 |
+| **過渡（E-field）** | 後退 Euler + 算術平均フラックス | PNP 連立方程式 |
+
+**空間離散化**（非一様グリッド）:
+$$\frac{d^2 \phi}{d x^2} \approx \frac{2}{h_i + h_{i+1}} \left( \frac{\phi_{i+1} - \phi_i}{h_{i+1}} - \frac{\phi_i - \phi_{i-1}}{h_i} \right)$$
+
+**Newton-Raphson 反復**: 残差 $R_i = \frac{d^2\phi}{dx^2} - \frac{2eN_Ac_0}{\varepsilon}\sinh(\psi_i)$ をゼロにする $\delta\phi$ を求め、$\phi \leftarrow \phi + \omega \cdot \delta\phi$ で更新（$\omega$ は緩和係数）。
 
 ### 特性スケール
 
 | 量 | 定義 | 1M での値 |
 |---|---|---|
-| Debye 長 λD | √(εkBT / 2e²c₀NA) | 0.12 nm |
-| 熱電圧 φT | kBT/e | 25.7 mV |
+| Debye 長 λD | $\sqrt{\varepsilon k_B T / 2e^2 c_0 N_A}$ | 0.12 nm |
+| 熱電圧 φT | $k_B T / e$ | 25.7 mV |
 
-### Bikerman モデル
+### Bikerman モデル（有限イオンサイズ）
 
-有限イオンサイズ a を考慮した修正 Boltzmann 分布:
+修正 Boltzmann 分布（充填率 $\nu = 2a^3 c_0 N_A$）:
 
 $$c_\pm = \frac{c_0 \exp(\mp \psi)}{1 - \nu + \nu \cosh(\psi)}$$
 
-ここで ν = 2a³c₀NA は充填率。
+高濃度で crowding 効果により $c_\pm \leq c_{\max} = 1/(a^3 N_A)$ に制限される。
 
 ## 参考文献
 
