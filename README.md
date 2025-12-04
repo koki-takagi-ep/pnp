@@ -114,17 +114,27 @@ python3 scripts/plot_dual_electrode.py
 
 <div align="center">
 <img src="results/grid_convergence.png" width="500">
-
-*Standard PB: 2次精度の収束を確認（平均収束次数: 2.00）*
 </div>
+
+**参照解**: Gouy-Chapman解析解 $\tanh(\psi/4) = \tanh(\psi_0/4) \exp(-x/\lambda_D)$
+
+**L2誤差**: $\|e\|_{L_2} = \sqrt{\int_0^L (\phi^{\text{num}} - \phi^{\text{GC}})^2 dx / L}$
+
+**結果**: 2次精度の収束を確認（平均収束次数: 2.00）
 
 ### 格子収束性（Bikerman）
 
 <div align="center">
 <img src="results/bikerman_convergence_full.png" width="600">
-
-*Bikerman: (a) 表面電荷 vs 解析解、(b) L2誤差（Richardson外挿）。両者とも2次精度。*
 </div>
+
+**(a) 表面電荷誤差**: Bikerman解析解 $\sigma = \sqrt{2\varepsilon k_B T c_0 N_A} \cdot \frac{2}{\sqrt{\nu}} \sinh^{-1}\left(\sqrt{\nu}\sinh\frac{\psi_0}{2}\right)$ との相対誤差 [%]
+
+**(b) 電位プロファイルL2誤差**: Richardson外挿法（最密グリッド N=3201 を参照解として使用）
+
+$$\|e\|_{L_2} = \sqrt{\frac{1}{N}\sum_i (\phi_i^{\text{num}} - \phi_i^{\text{ref}})^2}$$
+
+**結果**: 両指標とも2次精度（平均収束次数: σ ≈ 1.84, L2 ≈ 2.06）
 
 ### 過渡解析（EDL形成過程）⚠️
 

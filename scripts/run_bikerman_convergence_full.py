@@ -173,8 +173,8 @@ def main():
     a_nm = 0.7
     stretch = 3.0
 
-    # Grid sizes
-    N_values = [51, 101, 201, 401, 801, 1601, 3201, 6401]
+    # Grid sizes (exclude finest for L2 since we use Richardson extrapolation)
+    N_values = [51, 101, 201, 401, 801, 1601, 3201]
 
     # Analytical surface charge
     sigma_analytical = bikerman_analytical_sigma(phi0_mV, c0_M, eps_r, a_nm=a_nm)
@@ -197,7 +197,9 @@ def main():
         print(f"σ = {sigma:.4f} μC/cm²")
 
     print("\n" + "=" * 80)
-    print("  Results (both errors vs analytical solution)")
+    print("  Results")
+    print("  - Surface charge error: vs analytical solution (Bikerman)")
+    print("  - L2 error: vs finest grid (Richardson extrapolation)")
     print("=" * 80)
     print(f"{'N':>8} {'σ [μC/cm²]':>14} {'σ err [%]':>12} {'L2 err [mV]':>14} {'σ order':>10} {'L2 order':>10}")
     print("-" * 80)
@@ -205,16 +207,22 @@ def main():
     sigma_errors = []
     l2_errors = []
 
-    for i, N in enumerate(N_values):
+    # Reference for L2: finest grid
+    N_finest = N_values[-1]
+    x_ref = results[N_finest]['x']
+    phi_ref = results[N_finest]['phi']
+
+    for i, N in enumerate(N_values[:-1]):  # Exclude finest grid
         sigma_num = results[N]['sigma']
         sigma_err = abs(sigma_num - sigma_analytical) / sigma_analytical * 100
         sigma_errors.append(sigma_err)
 
-        # Compute analytical profile and L2 error
+        # Compute L2 error vs finest grid (Richardson extrapolation)
         x_num = results[N]['x']
         phi_num = results[N]['phi']
-        phi_analytical = bikerman_analytical_profile(x_num, phi0_mV, c0_M, eps_r, a_nm=a_nm)
-        l2_err = compute_l2_error(phi_num, phi_analytical)
+        # Interpolate finest grid to current grid points
+        phi_ref_interp = np.interp(x_num, x_ref, phi_ref)
+        l2_err = compute_l2_error(phi_num, phi_ref_interp)
         l2_errors.append(l2_err)
 
         # Convergence orders
@@ -225,13 +233,20 @@ def main():
         else:
             print(f"{N:>8} {sigma_num:>14.6f} {sigma_err:>12.4f} {l2_err:>14.6f} {'—':>10} {'—':>10}")
 
+    # Add finest grid row
+    sigma_num = results[N_finest]['sigma']
+    sigma_err = abs(sigma_num - sigma_analytical) / sigma_analytical * 100
+    sigma_order = np.log2(sigma_errors[-1] / sigma_err) if sigma_err > 1e-10 else float('nan')
+    print(f"{N_finest:>8} {sigma_num:>14.6f} {sigma_err:>12.4f} {'(reference)':>14} {sigma_order:>10.2f} {'—':>10}")
+    sigma_errors.append(sigma_err)
+
     print("-" * 80)
     print(f"Analytical σ: {sigma_analytical:.6f} μC/cm²")
 
-    # Average convergence orders
+    # Average convergence orders (exclude first point)
     if len(sigma_errors) > 2:
         sigma_orders = [np.log2(sigma_errors[i] / sigma_errors[i+1])
-                        for i in range(len(sigma_errors)-1) if sigma_errors[i+1] > 1e-10]
+                        for i in range(len(sigma_errors)-2) if sigma_errors[i+1] > 1e-10]
         l2_orders = [np.log2(l2_errors[i] / l2_errors[i+1])
                      for i in range(len(l2_errors)-1) if l2_errors[i+1] > 1e-10]
         print(f"\nAverage σ convergence order: {np.mean(sigma_orders):.2f}")
@@ -240,29 +255,34 @@ def main():
     # Plot
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.4, 3.7))
 
-    N_arr = np.array(N_values)
+    # For surface charge: use all N values
+    N_arr_sigma = np.array(N_values)
     L = 50.0  # Domain length in nm
-    dx_arr = L / (N_arr - 1)  # Grid spacing in nm
+    dx_arr_sigma = L / (N_arr_sigma - 1)
 
-    # Left: Surface charge error
-    ax1.loglog(dx_arr, sigma_errors, 'o-', color='C0', linewidth=1.5, markersize=6)
+    # For L2: exclude finest grid (it's the reference)
+    N_arr_l2 = np.array(N_values[:-1])
+    dx_arr_l2 = L / (N_arr_l2 - 1)
+
+    # Left: Surface charge error vs analytical
+    ax1.loglog(dx_arr_sigma, sigma_errors, 'o-', color='C0', linewidth=1.5, markersize=6)
     # 2nd order reference
-    dx_ref_line = np.array([dx_arr[0], dx_arr[-1]])
+    dx_ref_line = np.array([dx_arr_sigma[0], dx_arr_sigma[-1]])
     err_ref_2 = sigma_errors[-1] * (dx_ref_line / dx_ref_line[-1])**2
     ax1.loglog(dx_ref_line, err_ref_2, '--', color='gray', linewidth=1, label='2nd order')
     set_labels(ax1, r'Grid spacing $\Delta x$ (nm)', r'Surface charge error (\%)')
     ax1.legend(loc='lower right', frameon=False, fontsize=8)
-    ax1.set_title('(a) Surface charge', fontsize=10)
-    # Remove auto minor locator for log scale
+    ax1.set_title('(a) vs analytical $\\sigma$', fontsize=10)
     ax1.minorticks_off()
 
-    # Right: L2 error vs analytical profile
-    ax2.loglog(dx_arr, l2_errors, 's-', color='C1', linewidth=1.5, markersize=6)
-    err_ref_2_l2 = l2_errors[-1] * (dx_ref_line / dx_ref_line[-1])**2
-    ax2.loglog(dx_ref_line, err_ref_2_l2, '--', color='gray', linewidth=1, label='2nd order')
-    set_labels(ax2, r'Grid spacing $\Delta x$ (nm)', r'L2 error (mV)')
+    # Right: L2 error vs finest grid (Richardson)
+    ax2.loglog(dx_arr_l2, l2_errors, 's-', color='C1', linewidth=1.5, markersize=6)
+    dx_ref_line_l2 = np.array([dx_arr_l2[0], dx_arr_l2[-1]])
+    err_ref_2_l2 = l2_errors[-1] * (dx_ref_line_l2 / dx_ref_line_l2[-1])**2
+    ax2.loglog(dx_ref_line_l2, err_ref_2_l2, '--', color='gray', linewidth=1, label='2nd order')
+    set_labels(ax2, r'Grid spacing $\Delta x$ (nm)', r'L2 error vs finest (mV)')
     ax2.legend(loc='lower right', frameon=False, fontsize=8)
-    ax2.set_title('(b) Potential profile', fontsize=10)
+    ax2.set_title('(b) Richardson extrapolation', fontsize=10)
     ax2.minorticks_off()
 
     plt.tight_layout()
@@ -272,10 +292,11 @@ def main():
     plt.savefig(results_dir / 'bikerman_convergence_full.svg', bbox_inches='tight')
     print(f"\nSaved: results/bikerman_convergence_full.png")
 
-    # Save data
-    data = np.column_stack([N_arr, sigma_errors, l2_errors])
+    # Save data (pad l2_errors with nan for finest grid)
+    l2_errors_padded = l2_errors + [np.nan]
+    data = np.column_stack([N_arr_sigma, sigma_errors, l2_errors_padded])
     np.savetxt(results_dir / 'bikerman_convergence_full.csv', data,
-               header='N,Sigma_error_percent,L2_error_mV', delimiter=',', comments='')
+               header='N,Sigma_error_percent,L2_error_vs_finest_mV', delimiter=',', comments='')
     print(f"Saved: results/bikerman_convergence_full.csv")
 
 
