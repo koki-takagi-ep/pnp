@@ -163,6 +163,29 @@ public:
                                 const std::string& output_dir,
                                 int snapshot_interval = 10);
 
+    /**
+     * @brief Stable transient solver using electric field formulation
+     *
+     * Uses electric field E as primary variable instead of potential φ.
+     * This approach, inspired by PoNPs (Toyoura & Ueno, Kyoto University),
+     * treats Poisson equation as first-order: dE/dx = ρ/ε
+     *
+     * Features:
+     * - Backward Euler implicit time integration
+     * - Simple arithmetic mean flux (stable for all Peclet numbers)
+     * - Newton-Raphson nonlinear solver
+     * - Adaptive time stepping
+     * - Explicit charge conservation monitoring
+     *
+     * @param dt_init Initial time step [s]
+     * @param t_final Final simulation time [s]
+     * @param output_dir Directory for output files
+     * @param snapshot_interval Steps between snapshots
+     */
+    void solve_transient_efield(double dt_init, double t_final,
+                                const std::string& output_dir,
+                                int snapshot_interval = 10);
+
     const std::vector<double>& get_x() const { return x_; }
     const std::vector<double>& get_phi() const { return phi_; }
     const std::vector<double>& get_c_plus() const { return c_plus_; }

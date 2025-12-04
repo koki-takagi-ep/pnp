@@ -2840,4 +2840,459 @@ double PNPSolver1D::compute_total_capacitance() const {
     return 1.0 / (1.0 / C_left + 1.0 / C_right);
 }
 
+void PNPSolver1D::solve_transient_efield(double dt_init, double t_final,
+                                          const std::string& output_dir,
+                                          int snapshot_interval) {
+    /**
+     * Stable transient PNP solver using electric field formulation.
+     *
+     * Inspired by PoNPs (Toyoura & Ueno, Kyoto University).
+     *
+     * Governing equations:
+     * - Poisson (field form): dE/dx = ρ/ε = (e·NA/ε)(z₊c₊ + z₋c₋)
+     * - Nernst-Planck: ∂c/∂t = ∇·[D(∇c - zcE/φT)]
+     *
+     * Discretization:
+     * - Poisson: E[i] = E[i-1] + (ρ[i-1]/ε) * dx
+     * - NP flux (arithmetic mean): J = -D[(c[i+1]-c[i])/dx - z*(c[i+1]+c[i])/2 * E]
+     * - Time: Backward Euler (fully implicit)
+     *
+     * Features:
+     * - Adaptive time stepping
+     * - Charge conservation monitoring
+     * - Positivity enforcement via clipping
+     */
+
+    const int n = params_.N;
+    const double e_charge = PhysicalConstants::e;
+    const double kT = PhysicalConstants::kB * params_.T;
+    const double NA = PhysicalConstants::NA;
+    const double eps = PhysicalConstants::eps0 * params_.eps_r;
+    const double phi_T = kT / e_charge;  // Thermal voltage
+
+    // Newton parameters
+    const int max_newton_iter = 100;
+    const double newton_tol = 1e-10;
+    const double min_conc = 1e-20 * params_.c0;  // Minimum concentration
+
+    // Adaptive time stepping parameters
+    double dt = dt_init;
+    const double dt_min = dt_init * 0.001;
+    const double dt_max = dt_init * 100;
+    const double dt_grow = 1.2;
+    const double dt_shrink = 0.5;
+
+    std::cout << "\n========================================\n";
+    std::cout << "  Transient Solver (E-field formulation)\n";
+    std::cout << "========================================\n";
+    std::cout << "  Initial time step: " << dt_init * 1e9 << " ns\n";
+    std::cout << "  Final time: " << t_final * 1e9 << " ns\n";
+    std::cout << "  Newton tolerance: " << newton_tol << "\n";
+
+    // Use UNIFORM grid for stability
+    std::vector<double> x_uniform(n);
+    const double L = params_.L;
+    const double dx = L / (n - 1);
+    for (int i = 0; i < n; ++i) {
+        x_uniform[i] = i * dx;
+    }
+
+    // Initialize: uniform concentration, linear potential ramp
+    std::vector<double> phi(n), c_plus(n), c_minus(n);
+    std::vector<double> phi_old(n), c_plus_old(n), c_minus_old(n);
+    std::vector<double> E(n-1);  // Electric field at cell faces
+
+    const double phi_left = params_.phi_left;
+    const double phi_right = params_.phi_right;
+
+    for (int i = 0; i < n; ++i) {
+        c_plus[i] = params_.c0;
+        c_minus[i] = params_.c0;
+        // Linear potential ramp
+        phi[i] = phi_left + (phi_right - phi_left) * x_uniform[i] / L;
+    }
+
+    // Initialize E from linear potential
+    for (int i = 0; i < n-1; ++i) {
+        E[i] = -(phi[i+1] - phi[i]) / dx;
+    }
+
+    // Create output directory
+    std::filesystem::create_directories(output_dir);
+    std::ofstream time_file(output_dir + "/time_info.dat");
+    time_file << "# step  time_ns  dt_ns  newton_iter  Q_error  c+_max  c-_max\n";
+
+    // Compute initial total charge (should be zero for neutral system)
+    auto compute_total_charge = [&]() {
+        double Q = 0.0;
+        for (int i = 0; i < n; ++i) {
+            double rho = e_charge * NA * (params_.z_plus * c_plus[i] + params_.z_minus * c_minus[i]);
+            Q += rho * dx;
+        }
+        return Q;
+    };
+
+    const double Q_initial = compute_total_charge();
+    std::cout << "  Initial total charge: " << Q_initial << " C/m²\n";
+
+    int snapshot_count = 0;
+    double time = 0.0;
+    int total_steps = 0;
+
+    // Save initial state
+    {
+        x_ = x_uniform;
+        phi_ = phi;
+        c_plus_ = c_plus;
+        c_minus_ = c_minus;
+        std::ostringstream ss;
+        ss << output_dir << "/snapshot_" << std::setfill('0') << std::setw(5) << snapshot_count << ".dat";
+        save_results(ss.str());
+        time_file << total_steps << "\t" << time * 1e9 << "\t" << dt * 1e9 << "\t0\t0\t1\t1\n";
+        snapshot_count++;
+    }
+
+    // Main time loop
+    while (time < t_final) {
+        // Adjust dt for final step
+        if (time + dt > t_final) {
+            dt = t_final - time;
+        }
+
+        // Store old values
+        phi_old = phi;
+        c_plus_old = c_plus;
+        c_minus_old = c_minus;
+
+        // Newton iteration for this time step
+        int newton_iter = 0;
+        double newton_error = 1.0;
+        bool step_converged = false;
+
+        while (newton_iter < max_newton_iter && newton_error > newton_tol) {
+            // Build residual vector and Jacobian
+            // Variables: [c+[0], c-[0], c+[1], c-[1], ..., c+[n-1], c-[n-1], E[0], ..., E[n-2]]
+            // Total: 2n + (n-1) = 3n - 1 unknowns
+
+            const int n_conc = 2 * n;      // Concentration unknowns
+            const int n_field = n - 1;      // Electric field unknowns
+            const int n_total = n_conc + n_field;
+
+            std::vector<double> F(n_total, 0.0);
+            std::vector<std::vector<double>> J(n_total, std::vector<double>(n_total, 0.0));
+
+            // Helper indices
+            auto idx_cp = [](int i) { return 2 * i; };      // c+ index
+            auto idx_cm = [](int i) { return 2 * i + 1; };  // c- index
+            auto idx_E = [&](int i) { return n_conc + i; }; // E index
+
+            // --- NP equations for concentrations ---
+            // For interior points: (c - c_old)/dt = -(J[i+1/2] - J[i-1/2])/dx
+            // Flux: J = -D[(c[i+1]-c[i])/dx - z*(c[i+1]+c[i])/2 * E]
+
+            const double D_plus = params_.D_plus;
+            const double D_minus = params_.D_minus;
+            const double z_plus = params_.z_plus;
+            const double z_minus = params_.z_minus;
+
+            for (int i = 0; i < n; ++i) {
+                // c+ equation
+                {
+                    double F_cp = (c_plus[i] - c_plus_old[i]) / dt;
+
+                    // Right flux J[i+1/2] (if i < n-1)
+                    double J_right = 0.0;
+                    if (i < n - 1) {
+                        double c_avg = 0.5 * (c_plus[i] + c_plus[i+1]);
+                        double dc_dx = (c_plus[i+1] - c_plus[i]) / dx;
+                        J_right = -D_plus * (dc_dx - z_plus * c_avg * E[i] / phi_T);
+                    }
+
+                    // Left flux J[i-1/2] (if i > 0)
+                    double J_left = 0.0;
+                    if (i > 0) {
+                        double c_avg = 0.5 * (c_plus[i-1] + c_plus[i]);
+                        double dc_dx = (c_plus[i] - c_plus[i-1]) / dx;
+                        J_left = -D_plus * (dc_dx - z_plus * c_avg * E[i-1] / phi_T);
+                    }
+
+                    // Boundary conditions for closed system (zero flux)
+                    if (params_.closed_system) {
+                        if (i == 0) J_left = 0.0;
+                        if (i == n - 1) J_right = 0.0;
+                    }
+
+                    F_cp += (J_right - J_left) / dx;
+                    F[idx_cp(i)] = F_cp;
+
+                    // Jacobian entries
+                    J[idx_cp(i)][idx_cp(i)] = 1.0 / dt;
+
+                    if (i < n - 1) {
+                        // ∂F/∂c+[i] from J_right
+                        J[idx_cp(i)][idx_cp(i)] += D_plus / (dx * dx) - D_plus * z_plus * E[i] / (2 * phi_T * dx);
+                        // ∂F/∂c+[i+1] from J_right
+                        J[idx_cp(i)][idx_cp(i+1)] = -D_plus / (dx * dx) - D_plus * z_plus * E[i] / (2 * phi_T * dx);
+                        // ∂F/∂E[i] from J_right
+                        J[idx_cp(i)][idx_E(i)] = D_plus * z_plus * 0.5 * (c_plus[i] + c_plus[i+1]) / (phi_T * dx);
+                    }
+
+                    if (i > 0) {
+                        // ∂F/∂c+[i] from J_left
+                        J[idx_cp(i)][idx_cp(i)] += -D_plus / (dx * dx) + D_plus * z_plus * E[i-1] / (2 * phi_T * dx);
+                        // ∂F/∂c+[i-1] from J_left
+                        J[idx_cp(i)][idx_cp(i-1)] += D_plus / (dx * dx) + D_plus * z_plus * E[i-1] / (2 * phi_T * dx);
+                        // ∂F/∂E[i-1] from J_left
+                        J[idx_cp(i)][idx_E(i-1)] += -D_plus * z_plus * 0.5 * (c_plus[i-1] + c_plus[i]) / (phi_T * dx);
+                    }
+                }
+
+                // c- equation (similar structure)
+                {
+                    double F_cm = (c_minus[i] - c_minus_old[i]) / dt;
+
+                    double J_right = 0.0;
+                    if (i < n - 1) {
+                        double c_avg = 0.5 * (c_minus[i] + c_minus[i+1]);
+                        double dc_dx = (c_minus[i+1] - c_minus[i]) / dx;
+                        J_right = -D_minus * (dc_dx - z_minus * c_avg * E[i] / phi_T);
+                    }
+
+                    double J_left = 0.0;
+                    if (i > 0) {
+                        double c_avg = 0.5 * (c_minus[i-1] + c_minus[i]);
+                        double dc_dx = (c_minus[i] - c_minus[i-1]) / dx;
+                        J_left = -D_minus * (dc_dx - z_minus * c_avg * E[i-1] / phi_T);
+                    }
+
+                    if (params_.closed_system) {
+                        if (i == 0) J_left = 0.0;
+                        if (i == n - 1) J_right = 0.0;
+                    }
+
+                    F_cm += (J_right - J_left) / dx;
+                    F[idx_cm(i)] = F_cm;
+
+                    J[idx_cm(i)][idx_cm(i)] = 1.0 / dt;
+
+                    if (i < n - 1) {
+                        J[idx_cm(i)][idx_cm(i)] += D_minus / (dx * dx) - D_minus * z_minus * E[i] / (2 * phi_T * dx);
+                        J[idx_cm(i)][idx_cm(i+1)] = -D_minus / (dx * dx) - D_minus * z_minus * E[i] / (2 * phi_T * dx);
+                        J[idx_cm(i)][idx_E(i)] = D_minus * z_minus * 0.5 * (c_minus[i] + c_minus[i+1]) / (phi_T * dx);
+                    }
+
+                    if (i > 0) {
+                        J[idx_cm(i)][idx_cm(i)] += -D_minus / (dx * dx) + D_minus * z_minus * E[i-1] / (2 * phi_T * dx);
+                        J[idx_cm(i)][idx_cm(i-1)] += D_minus / (dx * dx) + D_minus * z_minus * E[i-1] / (2 * phi_T * dx);
+                        J[idx_cm(i)][idx_E(i-1)] += -D_minus * z_minus * 0.5 * (c_minus[i-1] + c_minus[i]) / (phi_T * dx);
+                    }
+                }
+            }
+
+            // --- Poisson equation (electric field form) ---
+            // E[i] - E[i-1] = (ρ[i]/ε) * dx
+            // For i=0: E[0] is determined by potential BC: ∫E dx = φ_left - φ_right
+            // Discretize: Σ E[i] * dx = φ_left - φ_right
+
+            // Poisson: (E[i+1] - E[i])/dx = ρ[i]/ε for i = 0, ..., n-2
+            for (int i = 0; i < n - 2; ++i) {
+                double rho = e_charge * NA * (z_plus * c_plus[i+1] + z_minus * c_minus[i+1]);
+                F[idx_E(i)] = (E[i+1] - E[i]) / dx - rho / eps;
+
+                J[idx_E(i)][idx_E(i)] = -1.0 / dx;
+                J[idx_E(i)][idx_E(i+1)] = 1.0 / dx;
+                J[idx_E(i)][idx_cp(i+1)] = -e_charge * NA * z_plus / eps;
+                J[idx_E(i)][idx_cm(i+1)] = -e_charge * NA * z_minus / eps;
+            }
+
+            // Last equation: potential constraint (Gauss law alternative)
+            // Σ E[i] * dx = φ_left - φ_right
+            {
+                int eq = idx_E(n - 2);
+                double sum_E = 0.0;
+                for (int i = 0; i < n - 1; ++i) {
+                    sum_E += E[i];
+                }
+                F[eq] = sum_E * dx - (phi_left - phi_right);
+
+                for (int i = 0; i < n - 1; ++i) {
+                    J[eq][idx_E(i)] = dx;
+                }
+            }
+
+            // Solve J * delta = -F using Gaussian elimination
+            std::vector<double> delta(n_total, 0.0);
+
+            // LU decomposition with partial pivoting
+            std::vector<std::vector<double>> LU = J;
+            std::vector<int> perm(n_total);
+            for (int i = 0; i < n_total; ++i) perm[i] = i;
+
+            for (int k = 0; k < n_total - 1; ++k) {
+                // Find pivot
+                int max_row = k;
+                double max_val = std::abs(LU[k][k]);
+                for (int i = k + 1; i < n_total; ++i) {
+                    if (std::abs(LU[i][k]) > max_val) {
+                        max_val = std::abs(LU[i][k]);
+                        max_row = i;
+                    }
+                }
+                if (max_row != k) {
+                    std::swap(LU[k], LU[max_row]);
+                    std::swap(perm[k], perm[max_row]);
+                }
+
+                if (std::abs(LU[k][k]) < 1e-20) continue;
+
+                for (int i = k + 1; i < n_total; ++i) {
+                    LU[i][k] /= LU[k][k];
+                    for (int j = k + 1; j < n_total; ++j) {
+                        LU[i][j] -= LU[i][k] * LU[k][j];
+                    }
+                }
+            }
+
+            // Forward substitution
+            std::vector<double> b(n_total);
+            for (int i = 0; i < n_total; ++i) {
+                b[i] = -F[perm[i]];
+            }
+            for (int i = 1; i < n_total; ++i) {
+                for (int j = 0; j < i; ++j) {
+                    b[i] -= LU[i][j] * b[j];
+                }
+            }
+
+            // Back substitution
+            for (int i = n_total - 1; i >= 0; --i) {
+                delta[i] = b[i];
+                for (int j = i + 1; j < n_total; ++j) {
+                    delta[i] -= LU[i][j] * delta[j];
+                }
+                if (std::abs(LU[i][i]) > 1e-20) {
+                    delta[i] /= LU[i][i];
+                }
+            }
+
+            // Damped update with positivity enforcement
+            double damping = 1.0;
+            const int max_damp = 10;
+            for (int damp_iter = 0; damp_iter < max_damp; ++damp_iter) {
+                bool valid = true;
+
+                // Check if update would make concentrations negative
+                for (int i = 0; i < n; ++i) {
+                    double new_cp = c_plus[i] + damping * delta[idx_cp(i)];
+                    double new_cm = c_minus[i] + damping * delta[idx_cm(i)];
+                    if (new_cp < min_conc || new_cm < min_conc) {
+                        valid = false;
+                        break;
+                    }
+                }
+
+                if (valid) break;
+                damping *= 0.5;
+            }
+
+            // Apply update
+            newton_error = 0.0;
+            for (int i = 0; i < n; ++i) {
+                double old_cp = c_plus[i];
+                double old_cm = c_minus[i];
+                c_plus[i] += damping * delta[idx_cp(i)];
+                c_minus[i] += damping * delta[idx_cm(i)];
+
+                // Enforce minimum concentration
+                c_plus[i] = std::max(c_plus[i], min_conc);
+                c_minus[i] = std::max(c_minus[i], min_conc);
+
+                newton_error = std::max(newton_error, std::abs(c_plus[i] - old_cp) / (std::abs(old_cp) + 1e-10));
+                newton_error = std::max(newton_error, std::abs(c_minus[i] - old_cm) / (std::abs(old_cm) + 1e-10));
+            }
+
+            for (int i = 0; i < n - 1; ++i) {
+                double old_E = E[i];
+                E[i] += damping * delta[idx_E(i)];
+                newton_error = std::max(newton_error, std::abs(E[i] - old_E) / (std::abs(old_E) + 1e-10));
+            }
+
+            ++newton_iter;
+        }
+
+        step_converged = (newton_error <= newton_tol);
+
+        // Adaptive time stepping
+        if (!step_converged || newton_iter >= max_newton_iter / 2) {
+            // Step failed or borderline: restore old values and reduce dt
+            if (!step_converged) {
+                c_plus = c_plus_old;
+                c_minus = c_minus_old;
+                // Recompute E from charge distribution
+                for (int i = 0; i < n - 1; ++i) {
+                    E[i] = -(phi_old[i+1] - phi_old[i]) / dx;
+                }
+                dt *= dt_shrink;
+                if (dt < dt_min) {
+                    std::cerr << "Warning: Time step below minimum at t = " << time * 1e9 << " ns\n";
+                    dt = dt_min;
+                }
+                continue;  // Retry with smaller dt
+            }
+        }
+
+        // Update potential from E field
+        phi[0] = phi_left;
+        for (int i = 1; i < n; ++i) {
+            phi[i] = phi[i-1] - E[i-1] * dx;
+        }
+
+        time += dt;
+        ++total_steps;
+
+        // Check charge conservation (use absolute error since Q_initial may be zero)
+        double Q_current = compute_total_charge();
+        double Q_error = std::abs(Q_current - Q_initial);  // Absolute error in C/m²
+
+        // Find max concentrations
+        double c_plus_max = *std::max_element(c_plus.begin(), c_plus.end()) / params_.c0;
+        double c_minus_max = *std::max_element(c_minus.begin(), c_minus.end()) / params_.c0;
+
+        // Save snapshot
+        if (total_steps % snapshot_interval == 0 || time >= t_final) {
+            x_ = x_uniform;
+            phi_ = phi;
+            c_plus_ = c_plus;
+            c_minus_ = c_minus;
+            std::ostringstream ss;
+            ss << output_dir << "/snapshot_" << std::setfill('0') << std::setw(5) << snapshot_count << ".dat";
+            save_results(ss.str());
+
+            time_file << total_steps << "\t" << time * 1e9 << "\t" << dt * 1e9 << "\t"
+                      << newton_iter << "\t" << Q_error << "\t"
+                      << c_plus_max << "\t" << c_minus_max << "\n";
+
+            std::cout << "  t = " << std::fixed << std::setprecision(2) << time * 1e9
+                      << " ns, iter = " << newton_iter
+                      << ", c+/c0 = " << std::scientific << std::setprecision(2) << c_plus_max
+                      << ", c-/c0 = " << c_minus_max
+                      << ", Q_err = " << Q_error << "\n";
+
+            ++snapshot_count;
+        }
+
+        // Grow dt if converging well
+        if (step_converged && newton_iter < max_newton_iter / 4) {
+            dt = std::min(dt * dt_grow, dt_max);
+        }
+    }
+
+    std::cout << "\n  Transient simulation completed.\n";
+    std::cout << "  Total steps: " << total_steps << "\n";
+    std::cout << "  Final time: " << time * 1e9 << " ns\n";
+    std::cout << "  Snapshots saved to: " << output_dir << "/\n";
+
+    time_file.close();
+}
+
 } // namespace pnp

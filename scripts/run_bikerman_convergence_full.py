@@ -2,7 +2,7 @@
 """
 Comprehensive grid convergence study for Bikerman model.
 1. Surface charge error vs analytical solution
-2. L2 error of potential profile using Richardson extrapolation
+2. L2 error of potential profile vs analytical solution
 """
 
 import subprocess
@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import sys
 import re
+from scipy.integrate import solve_ivp
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'styles'))
 from plot_style import setup_plot_style, setup_axis_style, set_labels, FIGURE_SIZES
@@ -37,6 +38,80 @@ def bikerman_analytical_sigma(phi0_mV, c0_M=1.0, eps_r=12, T=298.15, a_nm=0.7):
     sigma = prefactor * np.sqrt(log_term)
 
     return sigma * 100  # Convert to μC/cm²
+
+
+def bikerman_analytical_profile(x_nm, phi0_mV, c0_M=1.0, eps_r=12, T=298.15, a_nm=0.7, L_nm=50.0):
+    """
+    Analytical Bikerman potential profile by integrating the first integral.
+
+    The first integral of Bikerman equation gives:
+        |dφ/dx| = sqrt(2 kB T c0 NA / ε) * sqrt((2/ν) ln(1 - ν + ν cosh(ψ)))
+
+    For dual-electrode (closed system) with left > right potential:
+        - dφ/dx < 0 everywhere (potential decreases from left to right)
+        - φ(0) = φ0/2 (left electrode, relative to bulk)
+        - φ(L) = -φ0/2 (right electrode)
+        - φ_bulk at center = 0
+
+    We integrate from both electrodes towards the center.
+    """
+    eps = eps_0 * eps_r
+    c0 = c0_M * 1000  # mol/m³
+    a = a_nm * 1e-9   # m
+    L = L_nm * 1e-9   # m
+    phi_T = kB * T / e  # Thermal voltage
+
+    # Packing fraction
+    nu = 2 * a**3 * c0 * NA
+
+    # Prefactor for |dφ/dx|
+    prefactor = np.sqrt(2 * kB * T * c0 * NA / eps)
+
+    def dphidx(x, phi):
+        """RHS of dφ/dx equation. dφ/dx < 0 everywhere for this setup."""
+        psi = phi / phi_T  # Dimensionless potential
+        g = 1 - nu + nu * np.cosh(psi)
+        # Avoid log of small numbers
+        if g < 1e-10:
+            g = 1e-10
+        magnitude = prefactor * np.sqrt((2.0 / nu) * np.log(g))
+        # dφ/dx is always negative (potential decreases from left to right)
+        return -magnitude
+
+    # Surface potential (relative to bulk)
+    phi_surface = phi0_mV * 1e-3 / 2  # V
+
+    # Integrate from left electrode (x=0) to center (x=L/2)
+    # Initial condition: φ(0) = phi_surface > 0, φ decreases towards 0
+    x_left = np.linspace(0, L/2, 20001)
+    sol_left = solve_ivp(
+        dphidx, [0, L/2], [phi_surface],
+        t_eval=x_left, method='DOP853', rtol=1e-12, atol=1e-14
+    )
+
+    # Integrate from right electrode (x=L) towards center (x=L/2)
+    # Initial condition: φ(L) = -phi_surface < 0
+    # Since dφ/dx < 0 and we integrate backwards (x decreasing), φ increases towards 0
+    x_right = np.linspace(L, L/2, 20001)
+    sol_right = solve_ivp(
+        dphidx, [L, L/2], [-phi_surface],
+        t_eval=x_right, method='DOP853', rtol=1e-12, atol=1e-14
+    )
+
+    # Combine solutions
+    x_full = np.concatenate([sol_left.t, sol_right.t[::-1][1:]])  # Avoid duplicate at center
+    phi_full = np.concatenate([sol_left.y[0], sol_right.y[0][::-1][1:]])
+
+    # Convert to user coordinates: add bulk potential (which is φ0/2 for symmetric case)
+    # In user coords: left = φ0, right = 0, bulk = φ0/2
+    phi_bulk_user = phi0_mV * 1e-3 / 2
+    phi_user = phi_full + phi_bulk_user
+
+    # Interpolate to requested x points
+    x_full_nm = x_full * 1e9  # Convert to nm
+    phi_interp = np.interp(x_nm, x_full_nm, phi_user * 1e3)  # Convert to mV
+
+    return phi_interp
 
 
 def run_solver(phi0_mV, N, model='bikerman', ion_size=0.7, stretch=3.0, output_file=None):
@@ -74,11 +149,6 @@ def load_potential_profile(filename):
     x = data[:, 0]      # nm
     phi = data[:, 2]    # mV
     return x, phi
-
-
-def interpolate_to_grid(x_fine, phi_fine, x_coarse):
-    """Interpolate fine solution to coarse grid points."""
-    return np.interp(x_coarse, x_fine, phi_fine)
 
 
 def compute_l2_error(phi_num, phi_ref, dx=None):
@@ -126,13 +196,8 @@ def main():
         results[N] = {'x': x, 'phi': phi, 'sigma': sigma, 'file': output_file}
         print(f"σ = {sigma:.4f} μC/cm²")
 
-    # Reference solution (finest grid)
-    N_ref = N_values[-1]
-    x_ref = results[N_ref]['x']
-    phi_ref = results[N_ref]['phi']
-
     print("\n" + "=" * 80)
-    print("  Results")
+    print("  Results (both errors vs analytical solution)")
     print("=" * 80)
     print(f"{'N':>8} {'σ [μC/cm²]':>14} {'σ err [%]':>12} {'L2 err [mV]':>14} {'σ order':>10} {'L2 order':>10}")
     print("-" * 80)
@@ -140,16 +205,16 @@ def main():
     sigma_errors = []
     l2_errors = []
 
-    for i, N in enumerate(N_values[:-1]):  # Exclude reference grid
+    for i, N in enumerate(N_values):
         sigma_num = results[N]['sigma']
         sigma_err = abs(sigma_num - sigma_analytical) / sigma_analytical * 100
         sigma_errors.append(sigma_err)
 
-        # Interpolate reference to coarse grid for L2 comparison
-        x_coarse = results[N]['x']
-        phi_coarse = results[N]['phi']
-        phi_ref_interp = interpolate_to_grid(x_ref, phi_ref, x_coarse)
-        l2_err = compute_l2_error(phi_coarse, phi_ref_interp)
+        # Compute analytical profile and L2 error
+        x_num = results[N]['x']
+        phi_num = results[N]['phi']
+        phi_analytical = bikerman_analytical_profile(x_num, phi0_mV, c0_M, eps_r, a_nm=a_nm)
+        l2_err = compute_l2_error(phi_num, phi_analytical)
         l2_errors.append(l2_err)
 
         # Convergence orders
@@ -161,7 +226,7 @@ def main():
             print(f"{N:>8} {sigma_num:>14.6f} {sigma_err:>12.4f} {l2_err:>14.6f} {'—':>10} {'—':>10}")
 
     print("-" * 80)
-    print(f"Reference (N={N_ref}): σ = {results[N_ref]['sigma']:.6f} μC/cm²")
+    print(f"Analytical σ: {sigma_analytical:.6f} μC/cm²")
 
     # Average convergence orders
     if len(sigma_errors) > 2:
@@ -175,7 +240,7 @@ def main():
     # Plot
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.4, 3.7))
 
-    N_arr = np.array(N_values[:-1])
+    N_arr = np.array(N_values)
     L = 50.0  # Domain length in nm
     dx_arr = L / (N_arr - 1)  # Grid spacing in nm
 
@@ -187,17 +252,17 @@ def main():
     ax1.loglog(dx_ref_line, err_ref_2, '--', color='gray', linewidth=1, label='2nd order')
     set_labels(ax1, r'Grid spacing $\Delta x$ (nm)', r'Surface charge error (\%)')
     ax1.legend(loc='lower right', frameon=False, fontsize=8)
-    ax1.set_title('(a) Surface charge vs analytical', fontsize=10)
+    ax1.set_title('(a) Surface charge', fontsize=10)
     # Remove auto minor locator for log scale
     ax1.minorticks_off()
 
-    # Right: L2 error (Richardson)
+    # Right: L2 error vs analytical profile
     ax2.loglog(dx_arr, l2_errors, 's-', color='C1', linewidth=1.5, markersize=6)
     err_ref_2_l2 = l2_errors[-1] * (dx_ref_line / dx_ref_line[-1])**2
     ax2.loglog(dx_ref_line, err_ref_2_l2, '--', color='gray', linewidth=1, label='2nd order')
-    set_labels(ax2, r'Grid spacing $\Delta x$ (nm)', r'L2 error vs $N$=6401 (mV)')
+    set_labels(ax2, r'Grid spacing $\Delta x$ (nm)', r'L2 error (mV)')
     ax2.legend(loc='lower right', frameon=False, fontsize=8)
-    ax2.set_title('(b) Potential profile (Richardson)', fontsize=10)
+    ax2.set_title('(b) Potential profile', fontsize=10)
     ax2.minorticks_off()
 
     plt.tight_layout()

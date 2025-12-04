@@ -37,6 +37,7 @@ void print_usage(const char* program_name) {
               << "  --newton            Use fully implicit Newton method for transient\n"
               << "  --slotboom          Use Slotboom transformation for transient (stable)\n"
               << "  --shenxu            Use Shen-Xu positivity preserving scheme (most stable)\n"
+              << "  --efield            Use E-field formulation (inspired by PoNPs, stable)\n"
               << "  --help              Show this help message\n"
               << std::endl;
 }
@@ -66,6 +67,7 @@ int main(int argc, char* argv[]) {
     bool use_newton = false;       // Use fully implicit Newton method
     bool use_slotboom = false;     // Use Slotboom transformation method
     bool use_shenxu = false;       // Use Shen-Xu positivity preserving scheme
+    bool use_efield = false;       // Use E-field formulation (PoNPs-inspired)
 
     // Parse command line arguments
     for (int i = 1; i < argc; ++i) {
@@ -123,6 +125,9 @@ int main(int argc, char* argv[]) {
             run_transient = true;
         } else if (arg == "--shenxu") {
             use_shenxu = true;
+            run_transient = true;
+        } else if (arg == "--efield") {
+            use_efield = true;
             run_transient = true;
         }
     }
@@ -199,7 +204,12 @@ int main(int argc, char* argv[]) {
         // Create snapshot directory if needed
         std::filesystem::create_directories(snapshot_dir);
 
-        if (use_shenxu) {
+        if (use_efield) {
+            // Use E-field formulation (inspired by PoNPs, stable)
+            solver.solve_transient_efield(dt, t_final, snapshot_dir, snapshot_interval);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else if (use_shenxu) {
             // Use Shen-Xu positivity preserving scheme (unconditionally stable)
             solver.solve_transient_shenxu(dt, t_final, snapshot_dir, snapshot_interval);
             std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";

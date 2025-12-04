@@ -12,7 +12,8 @@ make clean        # Clean build artifacts
 # Run with specific options
 ./build/pnp_solver --phi0 100 --phi-right 0 --closed-system --c0 1.0
 
-# Transient solvers (⚠️ unstable - use continuation only for pseudo-transient)
+# Transient solvers
+./build/pnp_solver --efield --dt 0.1 --t-final 1.0  # E-field formulation (stable)
 ./build/pnp_solver --continuation 50    # Pseudo-transient (stable, reaches steady-state)
 
 # Bikerman model (steric effects)
@@ -40,6 +41,9 @@ bash scripts/run_comprehensive_convergence.sh  # Full parametric study
 | `--model <type>` | standard or bikerman | standard |
 | `--N <points>` | Grid points | 1001 |
 | `--stretch <factor>` | Grid stretching factor | 3.0 |
+| `--efield` | Use E-field transient solver | off |
+| `--dt <ns>` | Time step for transient | 0.1 |
+| `--t-final <μs>` | Final time for transient | 1.0 |
 
 **Note**: For high-voltage cases (> 200 mV) with c₀ = 1 M, use `--N 4001` for accurate surface charge calculation (< 3% error vs Gouy-Chapman).
 
@@ -54,7 +58,8 @@ This is a 1D Poisson-Nernst-Planck (PNP) solver for simulating electric double l
 - `solve()`: Steady-state Poisson-Boltzmann with optional charge neutrality constraint (closed system)
 - `compute_surface_charge()`: Returns (σ_left, σ_right) in C/m² using Gauss's law
 - `compute_capacitance()`: Returns differential capacitance of each EDL
-- `solve_transient_*()`: Various transient solvers (⚠️ numerically unstable, not production-ready)
+- `solve_transient_efield()`: E-field formulation transient solver (stable, production-ready)
+- `solve_transient_*()`: Other transient solvers (experimental, may be unstable)
 
 **Key Physical Concepts**:
 - **Open system**: Right boundary at bulk concentration (Dirichlet c=c₀)
@@ -165,4 +170,24 @@ plt.tight_layout()
 | Steady-state (Newton-Raphson) | ✅ | Production-ready, 2nd-order accurate |
 | Bikerman model | ✅ | Steric effects for finite ion size |
 | Surface charge/capacitance | ✅ | Gauss's law at boundaries |
-| Transient solvers | ❌ | Numerically unstable, under development |
+| Transient (E-field, `--efield`) | ✅ | Stable, backward Euler + Newton-Raphson |
+| Transient (other methods) | ❌ | Experimental, may be unstable |
+
+### E-field Transient Solver
+
+The `--efield` option activates a stable transient PNP solver inspired by [PoNPs](https://github.com/KazuakiToyoura/PoNPs) (Toyoura & Ueno, Kyoto University).
+
+**Key features:**
+- Electric field E as primary variable (Poisson: dE/dx = ρ/ε)
+- Arithmetic mean flux for Nernst-Planck equations
+- Backward Euler implicit time integration
+- Newton-Raphson nonlinear solver with damping
+- Adaptive time stepping
+- Charge conservation monitoring
+
+**Usage:**
+```bash
+./build/pnp_solver --phi0 100 --phi-right 0 --closed-system --efield --dt 0.1 --t-final 1.0
+```
+
+Output snapshots are saved to `results/transient_efield/`.
