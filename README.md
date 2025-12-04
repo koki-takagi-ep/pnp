@@ -143,7 +143,7 @@ $$\|e\|_{L_2} = \sqrt{\frac{1}{N}\sum_i (\phi_i^{\text{num}} - \phi_i^{\text{ref
 ### Modified Poisson-Fermi モデル（Bazant 2011 との比較）
 
 <div align="center">
-<img src="results/bazant_fig2_multi_comparison.png" width="700">
+<img src="results/bazant_fig2_multi_comparison.png?v=2" width="700">
 
 *Bazant et al. PRL 2011 Fig.2a との比較。(a) MPF (δc=10): overscreening を伴う電荷密度分布。(b) Bikerman (δc=0): 良好な一致。*
 </div>
@@ -156,9 +156,15 @@ $$(1 - \delta_c^2 \nabla^2) \nabla^2 \tilde{\phi} = -\tilde{\rho}$$
 
 **パラメータ**: Ṽ = 10（無次元電圧）、γ = 0.5（充填率）、a = 0.7 nm（イオン直径）
 
+**Debye長の定義の違い**: Bazant論文と本ソルバーでは Debye 長の定義が √2 異なる:
+- 本ソルバー: $\lambda_D = \sqrt{\varepsilon_0 \varepsilon_r k_B T / (2 e^2 N_A c_0)}$（1:1電解質の標準定義）
+- Bazant: $\lambda_{D,B} = \sqrt{\varepsilon_0 \varepsilon_r k_B T / (e^2 N_A c_0)} = \sqrt{2} \lambda_D$
+
+比較プロットでは x/a 軸にスケーリング係数 1/√2 を適用。
+
 **検証結果**:
 - **Bikerman (δc=0)**: Bazantのデータと良好な一致 ✓
-- **MPF (δc=10)**: 定性的に正しい挙動（crowding → overscreening → decay）を再現。遷移領域の形状に若干の差異あり
+- **MPF (δc=10)**: crowding → overscreening → decay の挙動を再現。遷移領域は良好に一致、overscreening 深さに若干の差異あり（-0.95 vs -0.79）
 
 **物理的解釈**: δc > 0 の場合、電極近傍でイオン相関効果により過剰遮蔽（overscreening）が発生し、電荷密度が符号反転する。これはイオン液体特有の現象。
 

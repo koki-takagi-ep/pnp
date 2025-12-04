@@ -10,6 +10,12 @@ Bazant 2011 PRL notation:
 
 Note: Bazant defines ρ̃ with opposite sign (c- - c+) so positive voltage
 gives positive ρ̃ at the electrode surface (anion accumulation).
+
+IMPORTANT: Debye length convention difference
+- Our solver: λD = sqrt(ε₀εᵣkBT / (2e²NAc₀))  [standard for 1:1 electrolyte]
+- Bazant uses: λD_B = sqrt(ε₀εᵣkBT / (e²NAc₀)) = √2 × λD
+- Therefore: x/a (Bazant) = x/a (ours) × (1/√2)
+- We apply this scaling factor when comparing to Bazant's reference data
 """
 
 import numpy as np
@@ -24,6 +30,10 @@ project_dir = script_dir.parent
 sys.path.insert(0, str(project_dir))
 
 from styles.plot_style import setup_plot_style, setup_axis_style, set_labels, FIGURE_SIZES
+
+
+# Scaling factor: Bazant's λD is √2 larger than ours
+DEBYE_LENGTH_SCALE = 1.0 / np.sqrt(2)
 
 
 def load_reference_data(case='V10_dc10'):
@@ -70,15 +80,15 @@ def plot_single_comparison():
     ref_x, ref_y = load_reference_data('V10_dc10')
 
     # Load our result (gamma=0.5 version)
-    result_file = project_dir / 'results/bazant_V10_dc10_gamma05.dat'
+    result_file = project_dir / 'results/bazant_mpf_dc10.dat'
     if result_file.exists():
         data = load_solver_result(result_file)
 
-        # Convert to Bazant units
+        # Convert to Bazant units with Debye length scaling
         a_nm = 0.7  # Ion diameter
         gamma = 0.5  # Packing fraction (Bazant uses γ=0.5)
 
-        x_a = data['x_nm'] / a_nm  # x/a
+        x_a = data['x_nm'] / a_nm * DEBYE_LENGTH_SCALE  # Apply scaling
 
         # Bazant uses ρ̃ = (c- - c+)/(2γc₀), opposite sign convention
         rho_tilde = (data['c_minus_norm'] - data['c_plus_norm']) / (2 * gamma)
@@ -118,10 +128,10 @@ def plot_multi_comparison():
 
     # Panel (a): MPF with delta_c = 10
     ref_x, ref_y = load_reference_data('V10_dc10')
-    result_file = project_dir / 'results/bazant_V10_dc10_gamma05.dat'
+    result_file = project_dir / 'results/bazant_mpf_dc10.dat'
     if result_file.exists():
         data = load_solver_result(result_file)
-        x_a = data['x_nm'] / a_nm
+        x_a = data['x_nm'] / a_nm * DEBYE_LENGTH_SCALE
         rho_tilde = (data['c_minus_norm'] - data['c_plus_norm']) / (2 * gamma)
         ax1.plot(x_a, rho_tilde, 'b-', linewidth=1.5, label='This work')
 
@@ -137,10 +147,10 @@ def plot_multi_comparison():
 
     # Panel (b): Bikerman (delta_c = 0)
     ref_x, ref_y = load_reference_data('V10_dc0')
-    result_file = project_dir / 'results/bazant_V10_dc0.dat'
+    result_file = project_dir / 'results/bazant_bikerman.dat'
     if result_file.exists():
         data = load_solver_result(result_file)
-        x_a = data['x_nm'] / a_nm
+        x_a = data['x_nm'] / a_nm * DEBYE_LENGTH_SCALE
         rho_tilde = (data['c_minus_norm'] - data['c_plus_norm']) / (2 * gamma)
         ax2.plot(x_a, rho_tilde, 'r-', linewidth=1.5, label='This work')
 
@@ -148,7 +158,7 @@ def plot_multi_comparison():
     ax2.axhline(y=0, color='gray', linestyle=':', linewidth=0.5)
     ax2.axhline(y=2, color='red', linestyle=':', linewidth=0.5, alpha=0.3)
     ax2.set_xlim([0, 5])
-    ax2.set_ylim([-1.0, 2.5])
+    ax2.set_ylim([-0.5, 2.5])
     set_labels(ax2, r'$x/a$', r'$\tilde{\rho}$')
     ax2.legend(loc='best', fontsize=8)
     ax2.set_title(r'(b) $\tilde{V}=10$, $\delta_c=0$ (Bikerman)', fontsize=10)
