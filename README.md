@@ -11,6 +11,7 @@ Poisson-Nernst-Planck (PNP) 方程式を用いて、帯電した界面近傍の�
 - **定常解析**: Newton-Raphson法による Poisson-Boltzmann 方程式の求解
 - **過渡解析**: E-field 定式化 + Newton-Raphson（⚠️ 機能するが低速）
 - **Bikerman モデル**: 有限イオンサイズによる立体効果
+- **Modified Poisson-Fermi モデル**: 電荷相関によるoverscreening
 - **両電極モデル**: キャパシタ構造（closed system）のシミュレーション
 - **非一様グリッド**: 界面付近にグリッドを集中配置
 
@@ -30,6 +31,9 @@ make
 
 # Bikerman モデル
 ./build/pnp_solver --phi0 100 --model bikerman --ion-size 0.7
+
+# Modified Poisson-Fermi モデル（overscreening）
+./build/pnp_solver --model mpf --phi0 100 --delta-c 10
 
 # 結果の可視化
 python3 scripts/plot_results.py
@@ -157,7 +161,8 @@ $$\|e\|_{L_2} = \sqrt{\frac{1}{N}\sum_i (\phi_i^{\text{num}} - \phi_i^{\text{ref
 | `--stretch <factor>` | グリッドストレッチング | 3.0 |
 | `--closed-system` | 両端ゼロフラックス境界条件 | off |
 | `--dual-electrode` | 両電極用対称グリッド | off |
-| `--model <type>` | standard / bikerman | standard |
+| `--model <type>` | standard / bikerman / mpf | standard |
+| `--delta-c <value>` | 相関長（MPF用） | 10 |
 | `--ion-size <nm>` | イオン直径（Bikerman用） | 0.7 |
 | `--output <file>` | 出力ファイル名 | results/pnp_results.dat |
 
@@ -202,6 +207,7 @@ pnp/
 │   ├── plot_voltage_charge.py # 電圧-電荷特性
 │   ├── plot_voltage_charge_comparison.py # PB vs Bikerman
 │   ├── plot_convergence.py   # 収束性プロット
+│   ├── plot_overscreening.py # MPFモデル可視化
 │   ├── run_convergence.sh    # 収束性テスト
 │   └── create_animation.py   # GIFアニメーション
 ├── styles/plot_style.py      # プロットスタイル定義
@@ -269,6 +275,36 @@ $$c_\pm = \frac{c_0 \exp(\mp \psi)}{g(\psi)}, \quad g(\psi) = 1 - \nu + \nu \cos
 
 **導出**: 格子気体の配置エントロピーを考慮した自由エネルギー最小化から導出（Bikerman 1942, Borukhov et al. 1997）。分母 $g(\psi)$ は「空いている格子点の割合」の逆数に対応。
 
+### Modified Poisson-Fermi モデル（電荷相関効果）
+
+**Bikerman の限界**: 立体効果を考慮するも、電荷相関（overscreening）効果は含まれない。
+
+**Modified Poisson-Fermi 方程式** (Bazant et al., PRL 2011):
+
+$$(1 - \delta_c^2 \nabla^2) \nabla^2 \tilde{\phi} = -\tilde{\rho}$$
+
+| パラメータ | 定義 | 物理的意味 |
+|-----------|------|-----------|
+| 相関長 $l_c$ | 静電相関の特性長さ | イオン間相関距離 |
+| 無次元相関長 $\delta_c$ | $l_c / \lambda_D$ | Debye長に対する相関長の比 |
+
+**特徴**: $\delta_c > 1$ では電荷密度が空間的に振動（overscreening）。振動の波長は $\sim 2\sqrt{2}\pi\sqrt{\delta_c}$ でスケール。
+
+**使用例**:
+```bash
+# MPFモデル（δ_c = 10）
+./build/pnp_solver --model mpf --phi0 100 --delta-c 10
+
+# 可視化
+python3 scripts/plot_overscreening.py
+```
+
+<div align="center">
+<img src="results/charge_density_dimensionless.png" width="400">
+
+*MPFモデルによる無次元電荷密度分布（overscreening振動を示す）*
+</div>
+
 ## 参考文献
 
 1. Newman & Thomas-Alyea (2004). *Electrochemical Systems* (3rd ed.)
@@ -277,6 +313,7 @@ $$c_\pm = \frac{c_0 \exp(\mp \psi)}{g(\psi)}, \quad g(\psi) = 1 - \nu + \nu \cos
 4. Kornyshev (2007). *J. Phys. Chem. B* 111, 5545-5557.
 5. Bikerman (1942). *Philos. Mag.* 33, 384. — 有限イオンサイズ効果の原論文
 6. Borukhov, Andelman & Orland (1997). *Phys. Rev. Lett.* 79, 435. — Bikermanモデルの現代的再定式化
+7. Bazant, Storey & Kornyshev (2011). *Phys. Rev. Lett.* 106, 046102. — Modified Poisson-Fermi（overscreening）
 
 ## ライセンス
 
