@@ -253,13 +253,21 @@ $$\frac{d^2 \phi}{d x^2} \approx \frac{2}{h_i + h_{i+1}} \left( \frac{\phi_{i+1}
 | Debye 長 λD | $\sqrt{\varepsilon k_B T / 2e^2 c_0 N_A}$ | 0.12 nm |
 | 熱電圧 φT | $k_B T / e$ | 25.7 mV |
 
-### Bikerman モデル（有限イオンサイズ）
+### Bikerman モデル（有限イオンサイズ効果）
 
-修正 Boltzmann 分布（充填率 $\nu = 2a^3 c_0 N_A$）:
+**Standard PB の問題点**: Boltzmann分布 $c = c_0 \exp(\psi)$ はイオンを点電荷として扱い、電極近傍で濃度が非物理的に発散する。
 
-$$c_\pm = \frac{c_0 \exp(\mp \psi)}{1 - \nu + \nu \cosh(\psi)}$$
+**Bikerman モデル**: 格子気体モデルに基づき、イオンの有限体積を考慮。
 
-高濃度で crowding 効果により $c_\pm \leq c_{\max} = 1/(a^3 N_A)$ に制限される。
+$$c_\pm = \frac{c_0 \exp(\mp \psi)}{g(\psi)}, \quad g(\psi) = 1 - \nu + \nu \cosh(\psi)$$
+
+| パラメータ | 定義 | 物理的意味 |
+|-----------|------|-----------|
+| 充填率 $\nu$ | $2a^3 c_0 N_A$ | バルクでのイオン体積占有率 |
+| 混雑関数 $g(\psi)$ | $1 - \nu + \nu\cosh\psi$ | 局所的な空間の利用可能率の逆数 |
+| 最大濃度 | $c_{\max} = 2c_0/\nu$ | 1格子点に1イオン（最密充填）|
+
+**導出**: 格子気体の配置エントロピーを考慮した自由エネルギー最小化から導出（Bikerman 1942, Borukhov et al. 1997）。分母 $g(\psi)$ は「空いている格子点の割合」の逆数に対応。
 
 ## 参考文献
 
@@ -267,6 +275,8 @@ $$c_\pm = \frac{c_0 \exp(\mp \psi)}{1 - \nu + \nu \cosh(\psi)}$$
 2. Bazant et al. (2009). *Adv. Colloid Interface Sci.* 152, 48-88.
 3. Kilic, Bazant & Ajdari (2007). *Phys. Rev. E* 75, 021502.
 4. Kornyshev (2007). *J. Phys. Chem. B* 111, 5545-5557.
+5. Bikerman (1942). *Philos. Mag.* 33, 384. — 有限イオンサイズ効果の原論文
+6. Borukhov, Andelman & Orland (1997). *Phys. Rev. Lett.* 79, 435. — Bikermanモデルの現代的再定式化
 
 ## ライセンス
 
