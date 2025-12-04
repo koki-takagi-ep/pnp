@@ -9,7 +9,7 @@ Poisson-Nernst-Planck (PNP) 方程式を用いて、帯電した界面近傍の�
 ### 主な機能
 
 - **定常解析**: Newton-Raphson法による Poisson-Boltzmann 方程式の求解
-- **過渡解析**: Scharfetter-Gummel スキーム（⚠️ 開発中・不安定）
+- **過渡解析**: E-field 定式化 + Newton-Raphson（⚠️ 機能するが低速）
 - **Bikerman モデル**: 有限イオンサイズによる立体効果
 - **両電極モデル**: キャパシタ構造（closed system）のシミュレーション
 - **非一様グリッド**: 界面付近にグリッドを集中配置
