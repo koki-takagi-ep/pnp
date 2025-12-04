@@ -295,9 +295,27 @@ $$(1 - \delta_c^2 \nabla^2) \nabla^2 \tilde{\phi} = -\tilde{\rho}$$
 # MPFモデル（δ_c = 10）
 ./build/pnp_solver --model mpf --phi0 100 --delta-c 10
 
+# Bazant 2011 パラメータでの検証（Ṽ=10, γ=0.5）
+./build/pnp_solver --model mpf --phi0 257 --delta-c 10 --ion-size 0.7 --eps 10 --c0 2.42
+
 # 可視化
 python3 scripts/plot_overscreening.py
+python3 scripts/quick_bazant_compare.py
 ```
+
+### Bazant 2011 との比較検証
+
+<div align="center">
+<img src="results/bazant_fig2_multi_comparison.png" width="700">
+
+*Bazant et al. PRL 2011 Fig.2a との比較。(a) MPFモデル（δc=10）：overscreening振動を再現、(b) Bikermanモデル（δc=0）：単調減衰で良好な一致。*
+</div>
+
+**パラメータ設定**（Bazant 2011 の無次元化に対応）:
+- 無次元電圧: Ṽ = eφ₀/(kBT) = 10 → φ₀ = 257 mV
+- 充填率: γ = a³c₀NA = 0.5 → c₀ = 2.42 M（a = 0.7 nm）
+- 無次元相関長: δc = lc/λD = 10
+- 飽和電荷密度: ρ̃ = (c- - c+)/(2γc₀) → 最大 |ρ̃| = 1/γ = 2
 
 <div align="center">
 <img src="results/charge_density_dimensionless.png" width="400">
