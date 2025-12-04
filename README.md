@@ -52,6 +52,14 @@ python3 scripts/plot_dual_electrode.py
 *両電極構造における EDL（φ_L = 100 mV, φ_R = 0 mV, φ_bulk = 50 mV）*
 </div>
 
+### 格子点位置の可視化
+
+<div align="center">
+<img src="results/dual_electrode_grid_points.png" width="500">
+
+*両電極近傍の EDL 領域（5λD）にそれぞれ集中配置し、バルク領域は粗い格子で効率化。*
+</div>
+
 ### 電圧-電荷特性
 
 <div align="center">
