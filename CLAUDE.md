@@ -170,12 +170,12 @@ plt.tight_layout()
 | Steady-state (Newton-Raphson) | ✅ | Production-ready, 2nd-order accurate |
 | Bikerman model | ✅ | Steric effects for finite ion size |
 | Surface charge/capacitance | ✅ | Gauss's law at boundaries |
-| Transient (E-field, `--efield`) | ✅ | Stable, backward Euler + Newton-Raphson |
+| Transient (E-field, `--efield`) | ⚠️ | Correct but slow (O(N³)), needs optimization |
 | Transient (other methods) | ❌ | Experimental, may be unstable |
 
 ### E-field Transient Solver
 
-The `--efield` option activates a stable transient PNP solver inspired by [PoNPs](https://github.com/KazuakiToyoura/PoNPs) (Toyoura & Ueno, Kyoto University).
+The `--efield` option activates a transient PNP solver inspired by [PoNPs](https://github.com/KazuakiToyoura/PoNPs) (Toyoura & Ueno, Kyoto University).
 
 **Key features:**
 - Electric field E as primary variable (Poisson: dE/dx = ρ/ε)
@@ -183,11 +183,16 @@ The `--efield` option activates a stable transient PNP solver inspired by [PoNPs
 - Backward Euler implicit time integration
 - Newton-Raphson nonlinear solver with damping
 - Adaptive time stepping
-- Charge conservation monitoring
+- Charge conservation monitoring (Q_err ~ 10⁻¹² C/m²)
+
+**Known limitations:**
+- Uses dense O(N³) LU decomposition per Newton step
+- Very slow for N > 100 (minutes to hours for µs-scale simulations)
+- Future optimization: Gummel iteration or sparse solver needed
 
 **Usage:**
 ```bash
 ./build/pnp_solver --phi0 100 --phi-right 0 --closed-system --efield --dt 0.1 --t-final 1.0
 ```
 
-Output snapshots are saved to `results/transient_efield/`.
+Output snapshots are saved to `results/snapshots/`.
