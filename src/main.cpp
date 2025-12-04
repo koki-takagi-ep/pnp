@@ -19,7 +19,7 @@ void print_usage(const char* program_name) {
               << "  --phi-right <value> Right electrode potential in mV (default: 0)\n"
               << "  --c0 <value>        Bulk concentration in mol/L (default: 1.0)\n"
               << "  --eps <value>       Relative permittivity (default: 12)\n"
-              << "  --L <value>         Domain length in nm (default: 100)\n"
+              << "  --L <value>         Domain length in nm (default: 50)\n"
               << "  --N <value>         Number of grid points (default: 1001)\n"
               << "  --output <file>     Output filename (default: results/pnp_results.dat)\n"
               << "  --model <type>      Model type: standard or bikerman (default: standard)\n"
@@ -37,6 +37,7 @@ void print_usage(const char* program_name) {
               << "  --newton            Use fully implicit Newton method for transient\n"
               << "  --slotboom          Use Slotboom transformation for transient (stable)\n"
               << "  --shenxu            Use Shen-Xu positivity preserving scheme (most stable)\n"
+              << "  --efield            Use E-field formulation (inspired by PoNPs, stable)\n"
               << "  --help              Show this help message\n"
               << std::endl;
 }
@@ -47,7 +48,7 @@ int main(int argc, char* argv[]) {
     double phi_right_mV = 0.0;    // Right electrode potential [mV]
     double c0_molL = 1.0;         // Bulk concentration [mol/L]
     double eps_r = 12.0;          // Relative permittivity
-    double L_nm = 100.0;          // Domain length [nm]
+    double L_nm = 50.0;           // Domain length [nm]
     int N = 1001;                 // Grid points
     std::string output_file = "results/pnp_results.dat";
     std::string model_type = "standard";  // Model type: standard or bikerman
@@ -66,6 +67,7 @@ int main(int argc, char* argv[]) {
     bool use_newton = false;       // Use fully implicit Newton method
     bool use_slotboom = false;     // Use Slotboom transformation method
     bool use_shenxu = false;       // Use Shen-Xu positivity preserving scheme
+    bool use_efield = false;       // Use E-field formulation (PoNPs-inspired)
 
     // Parse command line arguments
     for (int i = 1; i < argc; ++i) {
@@ -123,6 +125,9 @@ int main(int argc, char* argv[]) {
             run_transient = true;
         } else if (arg == "--shenxu") {
             use_shenxu = true;
+            run_transient = true;
+        } else if (arg == "--efield") {
+            use_efield = true;
             run_transient = true;
         }
     }
@@ -199,7 +204,12 @@ int main(int argc, char* argv[]) {
         // Create snapshot directory if needed
         std::filesystem::create_directories(snapshot_dir);
 
-        if (use_shenxu) {
+        if (use_efield) {
+            // Use E-field formulation (inspired by PoNPs, stable)
+            solver.solve_transient_efield(dt, t_final, snapshot_dir, snapshot_interval);
+            std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
+            std::cout << "Use 'python3 scripts/create_animation.py' to generate GIF.\n";
+        } else if (use_shenxu) {
             // Use Shen-Xu positivity preserving scheme (unconditionally stable)
             solver.solve_transient_shenxu(dt, t_final, snapshot_dir, snapshot_interval);
             std::cout << "\nSnapshots saved to: " << snapshot_dir << "\n";
@@ -274,6 +284,20 @@ int main(int argc, char* argv[]) {
     if (params.closed_system) {
         std::cout << "  Bulk potential (self-consistent): " << phi_bulk * 1000.0 << " mV\n";
     }
+
+    // Compute and display charge and capacitance
+    auto [sigma_left, sigma_right] = solver.compute_surface_charge();
+    auto [C_left, C_right] = solver.compute_capacitance();
+    double C_total = solver.compute_total_capacitance();
+
+    std::cout << "\nCharge Analysis:\n";
+    std::cout << "  Surface charge density:\n";
+    std::cout << "    Left electrode:  " << std::showpos << sigma_left * 1e2 << std::noshowpos << " μC/cm²\n";
+    std::cout << "    Right electrode: " << std::showpos << sigma_right * 1e2 << std::noshowpos << " μC/cm²\n";
+    std::cout << "  Electroneutrality check: Σσ = " << (sigma_left + sigma_right) * 1e2 << " μC/cm²\n";
+    std::cout << "\nCapacitance:\n";
+    std::cout << "  Single EDL:  " << C_left * 1e2 << " μF/cm² (left), " << C_right * 1e2 << " μF/cm² (right)\n";
+    std::cout << "  Total (series): " << C_total * 1e2 << " μF/cm²\n";
 
     // Compute error metrics against Gouy-Chapman theory
     double L2_error = solver.compute_L2_error();

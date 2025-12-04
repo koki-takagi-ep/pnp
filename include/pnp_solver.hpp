@@ -17,6 +17,7 @@
 #include <vector>
 #include <string>
 #include <cmath>
+#include <utility>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -162,6 +163,29 @@ public:
                                 const std::string& output_dir,
                                 int snapshot_interval = 10);
 
+    /**
+     * @brief Stable transient solver using electric field formulation
+     *
+     * Uses electric field E as primary variable instead of potential φ.
+     * This approach, inspired by PoNPs (Toyoura & Ueno, Kyoto University),
+     * treats Poisson equation as first-order: dE/dx = ρ/ε
+     *
+     * Features:
+     * - Backward Euler implicit time integration
+     * - Simple arithmetic mean flux (stable for all Peclet numbers)
+     * - Newton-Raphson nonlinear solver
+     * - Adaptive time stepping
+     * - Explicit charge conservation monitoring
+     *
+     * @param dt_init Initial time step [s]
+     * @param t_final Final simulation time [s]
+     * @param output_dir Directory for output files
+     * @param snapshot_interval Steps between snapshots
+     */
+    void solve_transient_efield(double dt_init, double t_final,
+                                const std::string& output_dir,
+                                int snapshot_interval = 10);
+
     const std::vector<double>& get_x() const { return x_; }
     const std::vector<double>& get_phi() const { return phi_; }
     const std::vector<double>& get_c_plus() const { return c_plus_; }
@@ -205,6 +229,29 @@ public:
      * @brief Get model name as string
      */
     std::string get_model_name() const;
+
+    /**
+     * @brief Compute surface charge density at electrodes using Gauss's law
+     * @return pair of (sigma_left, sigma_right) in C/m^2
+     *
+     * Uses σ = -ε₀εᵣ(dφ/dx) at electrode surfaces with 2nd-order FD
+     * For closed system: sigma_left + sigma_right ≈ 0 (electroneutrality)
+     */
+    std::pair<double, double> compute_surface_charge() const;
+
+    /**
+     * @brief Compute differential capacitance of each EDL
+     * @return pair of (C_left, C_right) in F/m^2
+     *
+     * C = |σ| / |Δφ_EDL| where Δφ_EDL is potential drop across EDL
+     */
+    std::pair<double, double> compute_capacitance() const;
+
+    /**
+     * @brief Compute total capacitance of the capacitor (two EDLs in series)
+     * @return Total capacitance in F/m^2
+     */
+    double compute_total_capacitance() const;
 
 private:
     PNPParameters params_;
