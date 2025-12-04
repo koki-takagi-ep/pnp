@@ -140,6 +140,28 @@ $$\|e\|_{L_2} = \sqrt{\frac{1}{N}\sum_i (\phi_i^{\text{num}} - \phi_i^{\text{ref
 
 **結果**: 両指標とも2次精度（平均収束次数: σ ≈ 1.84, L2 ≈ 2.06）
 
+### Modified Poisson-Fermi モデル（Bazant 2011 との比較）
+
+<div align="center">
+<img src="results/bazant_fig2_multi_comparison.png" width="700">
+
+*Bazant et al. PRL 2011 Fig.2a との比較。(a) MPF (δc=10): overscreening を伴う電荷密度分布。(b) Bikerman (δc=0): 良好な一致。*
+</div>
+
+**モデル方程式**: Modified Poisson-Fermi 方程式（Bazant et al. PRL 106, 046102 (2011)）
+
+$$(1 - \delta_c^2 \nabla^2) \nabla^2 \tilde{\phi} = -\tilde{\rho}$$
+
+ここで δc = lc/λD は無次元相関長、lc はイオン相関長。
+
+**パラメータ**: Ṽ = 10（無次元電圧）、γ = 0.5（充填率）、a = 0.7 nm（イオン直径）
+
+**検証結果**:
+- **Bikerman (δc=0)**: Bazantのデータと良好な一致 ✓
+- **MPF (δc=10)**: 定性的に正しい挙動（crowding → overscreening → decay）を再現。遷移領域の形状に若干の差異あり
+
+**物理的解釈**: δc > 0 の場合、電極近傍でイオン相関効果により過剰遮蔽（overscreening）が発生し、電荷密度が符号反転する。これはイオン液体特有の現象。
+
 ### 過渡解析（EDL形成過程）⚠️
 
 <div align="center">

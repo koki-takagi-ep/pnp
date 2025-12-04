@@ -3452,7 +3452,10 @@ bool PNPSolver1D::solve_modified_pf() {
             F[4*i + 2] = (ppp_ip - ppp_im) / (dx_plus_n + dx_minus_n) - phi_ppp;
 
             // F4: (φ'''[i+1] - φ'''[i-1]) / (2*dx) - (1/δ_c²) * (φ''[i] - ρ̃(φ[i])) = 0
-            // This is the modified Poisson equation: d(φ''')/dx̃ = (1/δ_c²) * (φ'' - ρ̃)
+            // This is the modified Poisson equation from Bazant 2011:
+            //   (1 - δc²∇²)∇²φ̃ = -ρ̃_bazant = +ρ̃_code (sign convention difference)
+            // where ρ̃_code = sinh(φ̃)/denom > 0 for φ̃ > 0
+            // Expanding: δc²φ'''' = φ'' - ρ̃_code
             double y4_im = y[4*(i-1) + 3];  // φ'''[i-1]
             double y4_ip = y[4*(i+1) + 3];  // φ'''[i+1]
             F[4*i + 3] = (y4_ip - y4_im) / (dx_plus_n + dx_minus_n)
@@ -3480,7 +3483,7 @@ bool PNPSolver1D::solve_modified_pf() {
             J[4*i + 3][4*(i+1) + 3] = inv_2dx;
             J[4*i + 3][4*(i-1) + 3] = -inv_2dx;
             J[4*i + 3][4*i + 2] = -1.0 / delta_c2;
-            J[4*i + 3][4*i + 0] = d_rho / delta_c2;  // Note: ρ̃ has positive sign in (φ'' - ρ̃)
+            J[4*i + 3][4*i + 0] = d_rho / delta_c2;  // ∂F4/∂φ = +d(ρ̃)/dφ / δc² (from -ρ̃ term)
         }
 
         // Boundary conditions at x = 0 (left electrode)
