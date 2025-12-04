@@ -38,6 +38,20 @@ PNPSolver1D::PNPSolver1D(const PNPParameters& params)
     // Initialize bulk potential (will be computed for closed systems)
     phi_bulk_ = 0.0;
 
+    // Compute correlation length for Modified Poisson-Fermi model
+    // From Bazant 2011: l_c = delta_c * lambda_D (standard Debye length)
+    if (params_.model == ModelType::MODIFIED_PF) {
+        // Use standard Debye length (same as computed above)
+        // Correlation length: l_c = delta_c * lambda_D
+        l_c_ = params_.delta_c * lambda_D_;
+        // If l_c is explicitly provided, use it
+        if (params_.l_c > 0) {
+            l_c_ = params_.l_c;
+        }
+    } else {
+        l_c_ = 0.0;
+    }
+
     std::cout << "========================================\n";
     std::cout << "  1D PNP Solver Initialization\n";
     std::cout << "========================================\n";
@@ -47,6 +61,12 @@ PNPSolver1D::PNPSolver1D(const PNPParameters& params)
     if (params_.model == ModelType::BIKERMAN) {
         std::cout << "  Ion diameter: " << params_.a * 1e9 << " nm\n";
         std::cout << "  Packing fraction: " << nu_ << "\n";
+    }
+    if (params_.model == ModelType::MODIFIED_PF) {
+        std::cout << "  Ion diameter: " << params_.a * 1e9 << " nm\n";
+        std::cout << "  Packing fraction (gamma): " << nu_ / 2.0 << "\n";
+        std::cout << "  Correlation length: " << l_c_ * 1e9 << " nm\n";
+        std::cout << "  Dimensionless delta_c: " << params_.delta_c << "\n";
     }
     std::cout << "  Grid points: " << params_.N << "\n";
     std::cout << "  Grid stretching: " << params_.grid_stretch << "\n";
@@ -58,6 +78,7 @@ std::string PNPSolver1D::get_model_name() const {
     switch (params_.model) {
         case ModelType::STANDARD_PB: return "Standard Poisson-Boltzmann";
         case ModelType::BIKERMAN: return "Modified PB (Bikerman steric model)";
+        case ModelType::MODIFIED_PF: return "Modified Poisson-Fermi (Bazant 2011)";
         default: return "Unknown";
     }
 }
@@ -165,9 +186,10 @@ void PNPSolver1D::update_concentrations_from_phi() {
         double phi_rel_bulk = phi_[i] - phi_bulk_;
         double phi_norm = std::clamp(phi_rel_bulk / phi_T_, -50.0, 50.0);
 
-        if (params_.model == ModelType::BIKERMAN) {
-            // Bikerman model: c± = c₀ * exp(∓ψ) / g(ψ)
+        if (params_.model == ModelType::BIKERMAN || params_.model == ModelType::MODIFIED_PF) {
+            // Bikerman/MPF model: c± = c₀ * exp(∓ψ) / g(ψ)
             // where g(ψ) = 1 - ν + ν*cosh(ψ)
+            // For MPF, the same steric term applies (crowding effect)
             double cosh_val = std::cosh(phi_norm);
             double g = 1.0 - nu_ + nu_ * cosh_val;
             g = std::max(g, 0.01);
@@ -255,6 +277,11 @@ double PNPSolver1D::compute_residual() const {
 }
 
 bool PNPSolver1D::solve() {
+    // For Modified Poisson-Fermi model, use dedicated solver
+    if (params_.model == ModelType::MODIFIED_PF) {
+        return solve_modified_pf();
+    }
+
     std::cout << "\nStarting Newton-Raphson solver...\n";
     std::cout << "  Normalized surface potential: " << params_.phi_left / phi_T_ << "\n";
 
@@ -3293,6 +3320,329 @@ void PNPSolver1D::solve_transient_efield(double dt_init, double t_final,
     std::cout << "  Snapshots saved to: " << output_dir << "/\n";
 
     time_file.close();
+}
+
+/**
+ * @brief Solve Modified Poisson-Fermi equation (4th order BVP)
+ *
+ * Solves the dimensionless equation:
+ *   δ_c² φ'''' - φ'' = ρ̃(φ)
+ *
+ * where ρ̃(φ) = sinh(φ) / [1 + 2γ sinh²(φ/2)]
+ *            = sinh(φ) / [1 + 4γ sinh²(φ/2)]  (using sinh²(φ/2) = (cosh(φ)-1)/2)
+ *
+ * Converting to first-order system with y = [φ, φ', φ'', φ''']:
+ *   y₁' = y₂
+ *   y₂' = y₃
+ *   y₃' = y₄
+ *   y₄' = (1/δ_c²) * (y₃ - ρ̃(y₁)/ε_r ε_0) / (1/λ_D²)
+ *
+ * In dimensionless form (x̃ = x/λ_D, φ̃ = φ/φ_T):
+ *   y₄' = (1/δ_c²) * (y₃ - ρ̃(y₁))
+ *
+ * Boundary conditions:
+ *   y₁(0) = Ṽ (surface potential)
+ *   y₄(0) = 0 (flat charge density at surface: ∂ρ̃/∂x = 0)
+ *   y₁(L) = 0 (bulk: φ → 0)
+ *   y₂(L) = 0 (bulk: E → 0)
+ *
+ * Reference: Bazant, Storey, Kornyshev, PRL 106, 046102 (2011)
+ */
+bool PNPSolver1D::solve_modified_pf() {
+    std::cout << "\nStarting Modified Poisson-Fermi solver (Bazant 2011)...\n";
+
+    int n = params_.N;
+    double L = params_.L;
+    double delta_c = params_.delta_c;
+    double delta_c2 = delta_c * delta_c;
+    double gamma = nu_ / 2.0;  // Packing fraction ratio (typically 0.5)
+
+    std::cout << "  Dimensionless correlation length δ_c = " << delta_c << "\n";
+    std::cout << "  Packing fraction γ = " << gamma << "\n";
+    std::cout << "  Domain: " << L * 1e9 << " nm = " << L / lambda_D_ << " λ_D\n";
+
+    // State vector: y[4*i + j] where j=0:φ, j=1:φ', j=2:φ'', j=3:φ'''
+    // Working in dimensional units for now, then normalizing
+    std::vector<double> y(4 * n, 0.0);
+    std::vector<double> dy(4 * n, 0.0);
+
+    // Initialize with exponential decay (Gouy-Chapman like)
+    double V_surface = params_.phi_left / phi_T_;  // Dimensionless surface potential
+    std::cout << "  Dimensionless surface potential Ṽ = " << V_surface << "\n";
+
+    for (int i = 0; i < n; ++i) {
+        double x_norm = x_[i] / lambda_D_;  // Dimensionless position
+        // Initial guess: exponential decay with oscillations
+        double decay = std::exp(-x_norm / std::sqrt(2.0 * delta_c));
+        y[4*i + 0] = V_surface * decay;  // φ
+        y[4*i + 1] = -V_surface * decay / (lambda_D_ * std::sqrt(2.0 * delta_c));  // φ'
+        y[4*i + 2] = 0.0;  // φ''
+        y[4*i + 3] = 0.0;  // φ'''
+    }
+
+    // Newton-Raphson iteration
+    int max_iter = params_.max_iter;
+    double tol = params_.tol;
+    residual_history_.clear();
+
+    // Build sparse Jacobian structure (block tridiagonal with 4x4 blocks)
+    // For simplicity, use dense matrix for now (can optimize later)
+    // J is (4n x 4n) matrix
+
+    std::vector<std::vector<double>> J(4*n, std::vector<double>(4*n, 0.0));
+    std::vector<double> F(4*n, 0.0);  // Residual vector
+
+    for (int iter = 0; iter < max_iter; ++iter) {
+        // Build residual vector F and Jacobian J
+
+        // Clear F and J
+        std::fill(F.begin(), F.end(), 0.0);
+        for (auto& row : J) std::fill(row.begin(), row.end(), 0.0);
+
+        // Interior points: finite difference discretization
+        for (int i = 1; i < n - 1; ++i) {
+            double dx_plus = x_[i + 1] - x_[i];
+            double dx_minus = x_[i] - x_[i - 1];
+            double dx_avg = 0.5 * (dx_plus + dx_minus);
+
+            // Scale to dimensionless x (x̃ = x / λ_D)
+            double dx_plus_n = dx_plus / lambda_D_;
+            double dx_minus_n = dx_minus / lambda_D_;
+            double dx_avg_n = dx_avg / lambda_D_;
+
+            // Get state at this point
+            double phi_i = y[4*i + 0];
+            double phi_p = y[4*i + 1];  // dφ/dx̃
+            double phi_pp = y[4*i + 2];  // d²φ/dx̃²
+            double phi_ppp = y[4*i + 3];  // d³φ/dx̃³
+
+            // Residuals for ODE system:
+            // F1: dφ/dx̃ - y₂ = 0
+            // F2: dy₂/dx̃ - y₃ = 0
+            // F3: dy₃/dx̃ - y₄ = 0
+            // F4: δ_c² * dy₄/dx̃ - y₃ + ρ̃(φ) = 0
+
+            // Charge density (Bikerman form)
+            double sinh_phi = std::sinh(phi_i);
+            double cosh_phi = std::cosh(phi_i);
+            double sinh2_half = (cosh_phi - 1.0) / 2.0;  // sinh²(φ/2)
+            double denom = 1.0 + 4.0 * gamma * sinh2_half;
+            double rho_tilde = sinh_phi / denom;
+
+            // Derivative of ρ̃ w.r.t. φ
+            double d_rho = (cosh_phi * denom - sinh_phi * gamma * sinh_phi) / (denom * denom);
+            // Simplify: d_rho = (cosh(φ) - γ sinh²(φ) / denom) / denom
+            //                 = cosh(φ) / denom - γ sinh²(φ) / denom²
+
+            // Use central differences for derivatives
+            // F1: (φ[i+1] - φ[i-1]) / (2*dx) - φ'[i] = 0
+            double phi_im = y[4*(i-1) + 0];
+            double phi_ip = y[4*(i+1) + 0];
+
+            F[4*i + 0] = (phi_ip - phi_im) / (dx_plus_n + dx_minus_n) - phi_p;
+
+            // F2: (φ'[i+1] - φ'[i-1]) / (2*dx) - φ''[i] = 0
+            double pp_im = y[4*(i-1) + 1];
+            double pp_ip = y[4*(i+1) + 1];
+            F[4*i + 1] = (pp_ip - pp_im) / (dx_plus_n + dx_minus_n) - phi_pp;
+
+            // F3: (φ''[i+1] - φ''[i-1]) / (2*dx) - φ'''[i] = 0
+            double ppp_im = y[4*(i-1) + 2];
+            double ppp_ip = y[4*(i+1) + 2];
+            F[4*i + 2] = (ppp_ip - ppp_im) / (dx_plus_n + dx_minus_n) - phi_ppp;
+
+            // F4: (φ'''[i+1] - φ'''[i-1]) / (2*dx) - (1/δ_c²) * (φ''[i] - ρ̃(φ[i])) = 0
+            // This is the modified Poisson equation: d(φ''')/dx̃ = (1/δ_c²) * (φ'' - ρ̃)
+            double y4_im = y[4*(i-1) + 3];  // φ'''[i-1]
+            double y4_ip = y[4*(i+1) + 3];  // φ'''[i+1]
+            F[4*i + 3] = (y4_ip - y4_im) / (dx_plus_n + dx_minus_n)
+                         - (1.0 / delta_c2) * (phi_pp - rho_tilde);
+
+            // Fill Jacobian (central difference contributions)
+            double inv_2dx = 1.0 / (dx_plus_n + dx_minus_n);
+
+            // F1 = (φ[i+1] - φ[i-1]) / (2*dx) - φ'[i]
+            J[4*i + 0][4*(i+1) + 0] = inv_2dx;   // ∂F1/∂φ[i+1]
+            J[4*i + 0][4*(i-1) + 0] = -inv_2dx;  // ∂F1/∂φ[i-1]
+            J[4*i + 0][4*i + 1] = -1.0;          // ∂F1/∂φ'[i]
+
+            // F2 = (φ'[i+1] - φ'[i-1]) / (2*dx) - φ''[i]
+            J[4*i + 1][4*(i+1) + 1] = inv_2dx;
+            J[4*i + 1][4*(i-1) + 1] = -inv_2dx;
+            J[4*i + 1][4*i + 2] = -1.0;
+
+            // F3 = (φ''[i+1] - φ''[i-1]) / (2*dx) - φ'''[i]
+            J[4*i + 2][4*(i+1) + 2] = inv_2dx;
+            J[4*i + 2][4*(i-1) + 2] = -inv_2dx;
+            J[4*i + 2][4*i + 3] = -1.0;
+
+            // F4 = (φ'''[i+1] - φ'''[i-1]) / (2*dx) - (1/δ_c²) * (φ''[i] - ρ̃(φ[i]))
+            J[4*i + 3][4*(i+1) + 3] = inv_2dx;
+            J[4*i + 3][4*(i-1) + 3] = -inv_2dx;
+            J[4*i + 3][4*i + 2] = -1.0 / delta_c2;
+            J[4*i + 3][4*i + 0] = d_rho / delta_c2;  // Note: ρ̃ has positive sign in (φ'' - ρ̃)
+        }
+
+        // Boundary conditions at x = 0 (left electrode)
+        // BC1: φ(0) = V_surface
+        F[0] = y[0] - V_surface;
+        J[0][0] = 1.0;
+
+        // BC2: φ'''(0) = 0 (flat charge density at surface)
+        F[1] = y[3];  // φ'''[0] = 0
+        J[1][3] = 1.0;
+
+        // Actually, we need 4 BCs total. Let's use:
+        // At x=0: φ = V, φ''' = 0
+        // At x=L: φ = 0, φ' = 0
+
+        // Re-organize: boundary equations are at indices 0,1,2,3 and 4*(n-1), 4*(n-1)+1, etc.
+        // Let's use:
+        // Eq 0: φ(0) = V
+        // Eq 1: φ'''(0) = 0
+        // Eq 4*(n-1)+0: φ(L) = 0
+        // Eq 4*(n-1)+1: φ'(L) = 0
+        // Remaining equations at boundaries use the ODE
+
+        // Left boundary (i=0): BC1: φ(0) = V, BC2: φ'''(0) = 0
+        F[0] = y[0] - V_surface;
+        J[0][0] = 1.0;
+
+        F[1] = y[3];
+        J[1][3] = 1.0;
+
+        // For φ' and φ'' at i=0, use one-sided differences
+        // φ'[0] ≈ (φ[1] - φ[0]) / dx
+        double dx0 = (x_[1] - x_[0]) / lambda_D_;
+        F[2] = y[1] - (y[4] - y[0]) / dx0;
+        J[2][1] = 1.0;
+        J[2][4] = -1.0 / dx0;
+        J[2][0] = 1.0 / dx0;
+
+        // φ''[0] ≈ (φ'[1] - φ'[0]) / dx
+        F[3] = y[2] - (y[5] - y[1]) / dx0;
+        J[3][2] = 1.0;
+        J[3][5] = -1.0 / dx0;
+        J[3][1] = 1.0 / dx0;
+
+        // Right boundary (i=n-1): BC3: φ(L) = 0, BC4: φ'(L) = 0
+        int idx_r = 4 * (n - 1);
+        F[idx_r + 0] = y[idx_r + 0];  // φ(L) = 0
+        J[idx_r + 0][idx_r + 0] = 1.0;
+
+        F[idx_r + 1] = y[idx_r + 1];  // φ'(L) = 0
+        J[idx_r + 1][idx_r + 1] = 1.0;
+
+        // For φ'' and φ''' at i=n-1, use one-sided differences
+        double dxn = (x_[n-1] - x_[n-2]) / lambda_D_;
+        int idx_rm = 4 * (n - 2);
+
+        // φ''[n-1] ≈ (φ'[n-1] - φ'[n-2]) / dx
+        F[idx_r + 2] = y[idx_r + 2] - (y[idx_r + 1] - y[idx_rm + 1]) / dxn;
+        J[idx_r + 2][idx_r + 2] = 1.0;
+        J[idx_r + 2][idx_r + 1] = -1.0 / dxn;
+        J[idx_r + 2][idx_rm + 1] = 1.0 / dxn;
+
+        // φ'''[n-1] ≈ (φ''[n-1] - φ''[n-2]) / dx
+        F[idx_r + 3] = y[idx_r + 3] - (y[idx_r + 2] - y[idx_rm + 2]) / dxn;
+        J[idx_r + 3][idx_r + 3] = 1.0;
+        J[idx_r + 3][idx_r + 2] = -1.0 / dxn;
+        J[idx_r + 3][idx_rm + 2] = 1.0 / dxn;
+
+        // Compute residual norm
+        double residual = 0.0;
+        for (int i = 0; i < 4*n; ++i) {
+            residual += F[i] * F[i];
+        }
+        residual = std::sqrt(residual / (4*n));
+        residual_history_.push_back(residual);
+
+        if (iter % 10 == 0 || iter < 10) {
+            std::cout << "  Iter " << iter << ": residual = " << residual << "\n";
+        }
+
+        if (residual < tol) {
+            std::cout << "  Converged after " << iter + 1 << " iterations.\n";
+            break;
+        }
+
+        // Solve J * dy = -F using Gaussian elimination with partial pivoting
+        // (dense matrix solver)
+        std::vector<double> rhs = F;
+        for (auto& r : rhs) r = -r;
+
+        // LU decomposition with partial pivoting
+        std::vector<std::vector<double>> LU = J;
+        std::vector<int> perm(4*n);
+        for (int i = 0; i < 4*n; ++i) perm[i] = i;
+
+        for (int k = 0; k < 4*n - 1; ++k) {
+            // Find pivot
+            int max_row = k;
+            double max_val = std::abs(LU[k][k]);
+            for (int i = k + 1; i < 4*n; ++i) {
+                if (std::abs(LU[i][k]) > max_val) {
+                    max_val = std::abs(LU[i][k]);
+                    max_row = i;
+                }
+            }
+
+            // Swap rows
+            if (max_row != k) {
+                std::swap(LU[k], LU[max_row]);
+                std::swap(rhs[k], rhs[max_row]);
+                std::swap(perm[k], perm[max_row]);
+            }
+
+            // Check for singular matrix
+            if (std::abs(LU[k][k]) < 1e-30) {
+                std::cerr << "  Warning: Near-singular Jacobian at row " << k << "\n";
+                LU[k][k] = 1e-30;
+            }
+
+            // Eliminate below diagonal
+            for (int i = k + 1; i < 4*n; ++i) {
+                double factor = LU[i][k] / LU[k][k];
+                LU[i][k] = factor;
+                for (int j = k + 1; j < 4*n; ++j) {
+                    LU[i][j] -= factor * LU[k][j];
+                }
+                rhs[i] -= factor * rhs[k];
+            }
+        }
+
+        // Back substitution
+        dy.assign(4*n, 0.0);
+        for (int i = 4*n - 1; i >= 0; --i) {
+            dy[i] = rhs[i];
+            for (int j = i + 1; j < 4*n; ++j) {
+                dy[i] -= LU[i][j] * dy[j];
+            }
+            dy[i] /= LU[i][i];
+        }
+
+        // Update with damping
+        double omega = 0.5;  // Damping factor
+        for (int i = 0; i < 4*n; ++i) {
+            y[i] += omega * dy[i];
+        }
+
+        // Limit potential to prevent overflow
+        for (int i = 0; i < n; ++i) {
+            y[4*i] = std::clamp(y[4*i], -100.0, 100.0);
+        }
+    }
+
+    // Extract solution: φ = y[4*i + 0] (in dimensionless form)
+    // Convert back to dimensional: φ_dim = φ̃ * φ_T
+    for (int i = 0; i < n; ++i) {
+        phi_[i] = y[4*i + 0] * phi_T_;
+    }
+
+    // Update concentrations using the new potential
+    update_concentrations_from_phi();
+
+    return true;
 }
 
 } // namespace pnp

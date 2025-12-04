@@ -41,7 +41,8 @@ struct PhysicalConstants {
  */
 enum class ModelType {
     STANDARD_PB,     // Standard Poisson-Boltzmann
-    BIKERMAN         // Modified PB with steric effects (Bikerman model)
+    BIKERMAN,        // Modified PB with steric effects (Bikerman model)
+    MODIFIED_PF      // Modified Poisson-Fermi with electrostatic correlations (Bazant 2011)
 };
 
 /**
@@ -83,6 +84,10 @@ struct PNPParameters {
     // Ion size parameters for Bikerman model
     double a;           // Ion diameter [m]
 
+    // Correlation length for Modified Poisson-Fermi model (Bazant 2011)
+    double l_c;         // Electrostatic correlation length [m]
+    double delta_c;     // Dimensionless correlation length l_c / lambda_D
+
     // Default constructor with typical values for ionic liquids
     PNPParameters()
         : L(100e-9)       // 100 nm domain
@@ -103,6 +108,8 @@ struct PNPParameters {
         , closed_system(false) // Default: open system with Dirichlet BC at right
         , model(ModelType::STANDARD_PB)
         , a(0.7e-9)       // ~0.7 nm typical ion diameter for ionic liquids
+        , l_c(0.0)        // Correlation length (0 = no correlation, Bikerman limit)
+        , delta_c(10.0)   // Default dimensionless correlation length (Bazant 2011)
     {}
 };
 
@@ -273,8 +280,28 @@ private:
     double phi_T_;     // Thermal voltage [V]
     double nu_;        // Packing fraction for Bikerman model
     double phi_bulk_;  // Self-consistently determined bulk potential [V] (for closed system)
+    double l_c_;       // Correlation length [m] for Modified Poisson-Fermi
 
     void initialize();
+
+    /**
+     * @brief Solve Modified Poisson-Fermi equation (4th order BVP)
+     *
+     * Solves: (δ_c² ∇² - 1) ∇² φ̃ = -ρ̃(φ̃)
+     * where ρ̃ = sinh(φ̃) / [1 + 2γ sinh²(φ̃/2)]
+     *
+     * The 4th order ODE is converted to a first-order system:
+     *   y₁ = φ, y₂ = φ', y₃ = φ'', y₄ = φ'''
+     *
+     * Boundary conditions:
+     *   y₁(0) = V (surface potential)
+     *   y₄(0) = 0 (flat charge density at surface)
+     *   y₁(∞) = 0 (bulk)
+     *   y₂(∞) = 0 (bulk)
+     *
+     * Reference: Bazant, Storey, Kornyshev, PRL 106, 046102 (2011)
+     */
+    bool solve_modified_pf();
     void create_nonuniform_grid();
     void update_concentrations_from_phi();
     void solve_poisson();

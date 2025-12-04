@@ -22,8 +22,9 @@ void print_usage(const char* program_name) {
               << "  --L <value>         Domain length in nm (default: 50)\n"
               << "  --N <value>         Number of grid points (default: 1001)\n"
               << "  --output <file>     Output filename (default: results/pnp_results.dat)\n"
-              << "  --model <type>      Model type: standard or bikerman (default: standard)\n"
-              << "  --ion-size <value>  Ion diameter in nm for Bikerman model (default: 0.7)\n"
+              << "  --model <type>      Model type: standard, bikerman, or mpf (default: standard)\n"
+              << "  --ion-size <value>  Ion diameter in nm for Bikerman/MPF model (default: 0.7)\n"
+              << "  --delta-c <value>   Dimensionless correlation length for MPF model (default: 10)\n"
               << "  --stretch <value>   Grid stretching factor (default: 3.0, use 1.0 for uniform)\n"
               << "  --closed-system     Use zero-flux BC at both ends (capacitor model)\n"
               << "  --transient         Run transient simulation instead of steady-state\n"
@@ -53,6 +54,7 @@ int main(int argc, char* argv[]) {
     std::string output_file = "results/pnp_results.dat";
     std::string model_type = "standard";  // Model type: standard or bikerman
     double ion_size_nm = 0.7;     // Ion diameter for Bikerman model [nm]
+    double delta_c = 10.0;        // Dimensionless correlation length for MPF model
     double grid_stretch = 3.0;    // Grid stretching factor
     bool closed_system = false;   // Use zero-flux BC at both ends
     bool run_transient = false;   // Run transient simulation
@@ -93,6 +95,8 @@ int main(int argc, char* argv[]) {
             model_type = argv[++i];
         } else if (arg == "--ion-size" && i + 1 < argc) {
             ion_size_nm = std::atof(argv[++i]);
+        } else if (arg == "--delta-c" && i + 1 < argc) {
+            delta_c = std::atof(argv[++i]);
         } else if (arg == "--stretch" && i + 1 < argc) {
             grid_stretch = std::atof(argv[++i]);
         } else if (arg == "--closed-system") {
@@ -152,6 +156,9 @@ int main(int argc, char* argv[]) {
     // Set model type
     if (model_type == "bikerman") {
         params.model = pnp::ModelType::BIKERMAN;
+    } else if (model_type == "mpf" || model_type == "modified-pf") {
+        params.model = pnp::ModelType::MODIFIED_PF;
+        params.delta_c = delta_c;
     } else {
         params.model = pnp::ModelType::STANDARD_PB;
     }
@@ -166,6 +173,9 @@ int main(int argc, char* argv[]) {
     std::cout << "  Model: " << model_type << "\n";
     if (model_type == "bikerman") {
         std::cout << "  Ion size: " << ion_size_nm << " nm\n";
+    } else if (model_type == "mpf" || model_type == "modified-pf") {
+        std::cout << "  Ion size: " << ion_size_nm << " nm\n";
+        std::cout << "  Correlation length (delta_c): " << delta_c << "\n";
     }
     if (closed_system) {
         std::cout << "  Boundary: closed system (zero-flux at both ends)\n";
