@@ -17,8 +17,9 @@ sys.path.insert(0, str(project_dir))
 
 from styles.plot_style import setup_plot_style, setup_axis_style, set_labels, FIGURE_SIZES
 
-# Scaling factor: Bazant's λD is √2 larger than ours
-DEBYE_LENGTH_SCALE = 1.0 / np.sqrt(2)
+# No scaling needed: x-axis is x/a (physical length / ion diameter)
+# DEBYE_LENGTH_SCALE = 1.0 / np.sqrt(2)  # Only needed if x-axis were x/λD
+DEBYE_LENGTH_SCALE = 1.0
 
 
 def load_reference_data(case='V10_dc10'):

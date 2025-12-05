@@ -3426,7 +3426,8 @@ bool PNPSolver1D::solve_modified_pf() {
             double sinh_phi = std::sinh(phi_i);
             double cosh_phi = std::cosh(phi_i);
             double sinh2_half = (cosh_phi - 1.0) / 2.0;  // sinh²(φ/2)
-            double denom = 1.0 + 4.0 * gamma * sinh2_half;
+            // Bazant 2011 Eq.(6): denom = 1 + 2γ sinh²(φ̃/2)
+            double denom = 1.0 + 2.0 * gamma * sinh2_half;
             double rho_tilde = sinh_phi / denom;
 
             // Derivative of ρ̃ w.r.t. φ
